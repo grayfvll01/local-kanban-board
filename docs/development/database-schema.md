@@ -1,6 +1,6 @@
 # Database Schema
 
-The full database and vault reference lives in [../TECHNICAL-REFERENCE.md](../TECHNICAL-REFERENCE.md).
+The full database and vault reference lives in [TECHNICAL-REFERENCE.md](TECHNICAL-REFERENCE.md).
 
 The SQLite database is created automatically inside the selected vault as `kanban.sqlite`.
 
@@ -71,7 +71,7 @@ app_settings (
 - `filters`
 - `window_state`
 
-The vault path is stored in the Tauri app config folder for `com.local.localkanbanboard`, not in the database.
+The vault path is stored in the Tauri app config folder for `com.local.localkanbanword`, not in the database.
 
 ## Indexes
 

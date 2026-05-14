@@ -17,8 +17,8 @@ if errorlevel 1 (
 
 echo.
 echo Direct executable:
-echo %CD%\src-tauri\target\release\local-kanban-board.exe
+echo %CD%\src-tauri\target\release\local-kanban-word.exe
 echo.
 echo Windows installer:
-echo %CD%\src-tauri\target\release\bundle\nsis\local-kanban-board_0.1.0_x64-setup.exe
+echo %CD%\src-tauri\target\release\bundle\nsis\local-kanban-word_0.1.0_x64-setup.exe
 popd

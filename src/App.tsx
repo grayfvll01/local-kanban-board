@@ -67,7 +67,7 @@ export default function App() {
     setSnapshot(data);
     if (data.vault_required) {
       setSelectedBoardId("");
-      setNotice(data.status_error ?? "Choose a vault folder to start using local-kanban-board.");
+      setNotice(data.status_error ?? "Choose a vault folder to start using local-kanban-word.");
       return;
     }
     const storedFilters = safeJson<Filters>(data.settings.filters, defaultFilters);
@@ -99,7 +99,7 @@ export default function App() {
 
   const changeVault = useCallback(async () => {
     const ok = window.confirm(
-      "local-kanban-board will switch to another vault folder. The previous vault will not be deleted.",
+      "local-kanban-word will switch to another vault folder. The previous vault will not be deleted.",
     );
     if (!ok) return;
     if (snapshot && !snapshot.vault_required) {

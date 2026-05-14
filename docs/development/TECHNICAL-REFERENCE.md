@@ -1,10 +1,10 @@
 # Technical Reference
 
-This document is for future maintainers and AI-assisted development. The user-facing overview is in [README.md](README.md), and build instructions are in [BUILD-DEV.md](BUILD-DEV.md).
+This document is for future maintainers and AI-assisted development. The user-facing overview is in [../../README.md](../../README.md), and build instructions are in [BUILD-DEV.md](BUILD-DEV.md).
 
 ## 1. Project Overview
 
-local-kanban-board is an offline desktop Kanban app. It uses a Tauri shell, a React/TypeScript frontend, and a Rust command layer that persists data to SQLite inside a user-selected vault folder.
+local-kanban-word is an offline desktop Kanban app. It uses a Tauri shell, a React/TypeScript frontend, and a Rust command layer that persists data to SQLite inside a user-selected vault folder.
 
 Architecture goals:
 
@@ -28,7 +28,7 @@ Architecture goals:
 - Tailwind CSS: utility layout classes plus app-specific CSS in `src/styles/app.css`.
 - React Markdown and remark-gfm: Markdown preview, task checkboxes, and image rendering in card details.
 - lucide-react: icon set for toolbar, card, and settings controls.
-- dnd-kit: not currently installed. Card movement was intentionally changed to explicit arrow controls. If drag-and-drop returns later, dnd-kit should own collision detection and reorder intent while Rust remains the persistence boundary.
+- Native HTML drag-and-drop: card movement across columns and within columns. Arrow buttons remain available as precise movement controls.
 
 ## 3. Folder Structure
 
@@ -41,9 +41,9 @@ Architecture goals:
 - `src/styles`: theme definitions and CSS variable-backed component styles.
 - `src/types`: shared frontend models matching Rust snapshots.
 - `src-tauri`: Tauri, Rust backend, SQLite persistence, packaging config, and Rust tests.
-- `docs`: supplemental technical notes.
+- `docs/development`: supplemental technical notes.
 - `scripts`: Windows helper scripts for setup, development, and production builds.
-- `release`: local release staging guidance.
+- `releases/windows`: optional staged Windows executables and installers.
 
 The frontend treats Rust as the source of truth. It loads a full snapshot, performs optimistic local updates for common mutations, and uses reloads for import/restore or larger state changes.
 
@@ -159,28 +159,30 @@ Vault initialization happens in `Database::open_at`:
 5. Run migrations.
 6. Seed starter content if the database is empty.
 
-The selected vault path is stored in the app config folder for identifier `com.local.localkanbanboard`. The vault path is not stored in the database because it is needed before the database can be opened.
+The selected vault path is stored in the app config folder for identifier `com.local.localkanbanword`. The vault path is not stored in the database because it is needed before the database can be opened.
 
 When the vault is missing or cannot be opened, the snapshot marks `vault_required`, and the UI asks the user to select a vault. Changing vaults writes the new path, opens or initializes that vault, and refreshes the UI. The previous vault is not deleted.
 
-## 7. Card And Column Movement
+## 7. Drag-And-Drop And Card Movement
 
-The current app does not use drag-and-drop. Cards use explicit movement buttons:
+Cards support drag-and-drop and explicit movement buttons:
 
-- Left and right move a card to adjacent columns.
-- Up and down reorder a card inside its current column.
+- Drag a card onto another card to place it before that card.
+- Drag a card into a column to place it at the end.
+- Left and right buttons move a card to adjacent columns.
+- Up and down buttons reorder a card inside its current column.
 - Buttons are hidden when movement is not possible.
 
 Movement flow:
 
 1. `KanbanBoard` computes available movement per card.
-2. Moving a card creates a normalized card list.
+2. Drag/drop or button movement creates a normalized card list.
 3. `App.reorderCards` updates local state.
 4. Rust persists `column_id` and `sort_order` through `reorder_cards`.
 
 Column creation and deletion are handled through Tauri commands. Column drag reordering is not currently exposed in the UI, although the backend has a `reorder_columns` command.
 
-If drag-and-drop is reintroduced, keep ordering normalization in one place, use stable droppable IDs, and persist only the final `column_id` and `sort_order` changes.
+Keep ordering normalization in one place and persist only the final `column_id` and `sort_order` changes. If movement rules become more complex, consider moving to a dedicated drag-and-drop library while preserving Rust as the persistence boundary.
 
 ## 8. State Management
 
@@ -225,11 +227,11 @@ The build is driven by Tauri:
 Expected outputs:
 
 ```text
-src-tauri/target/release/local-kanban-board.exe
-src-tauri/target/release/bundle/nsis/local-kanban-board_0.1.0_x64-setup.exe
+src-tauri/target/release/local-kanban-word.exe
+src-tauri/target/release/bundle/nsis/local-kanban-word_0.1.0_x64-setup.exe
 ```
 
-GitHub Releases should be the public distribution channel. The `release` folder is only for local staging notes and optional deliberate staging.
+GitHub Releases should be the public distribution channel. The `releases/windows` folder is available only for optional, deliberate staging of Windows builds in the repository.
 
 Scripts:
 
@@ -252,7 +254,7 @@ Scripts:
 ## 11. Known Limitations And Technical Debt
 
 - Column reordering exists in backend shape but is not currently exposed in the UI.
-- Card movement uses arrow controls rather than drag-and-drop.
+- Drag-and-drop uses native browser events rather than a dedicated drag-and-drop library.
 - Schema migrations are currently simple idempotent table creation.
 - There is no cloud sync or multi-device conflict resolution.
 - There is no built-in encrypted vault mode.

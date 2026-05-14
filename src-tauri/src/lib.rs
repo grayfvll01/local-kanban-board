@@ -296,7 +296,7 @@ impl Database {
                 card_id,
                 board_id,
                 first_column,
-                "Welcome to local-kanban-board",
+                "Welcome to local-kanban-word",
                 "This card is Markdown-enabled.\n\n- [x] Local vault storage\n- [x] Move cards between columns\n- [ ] Add your first real task\n\nPaste or upload images in the card drawer.",
                 now
             ],
@@ -555,7 +555,7 @@ fn load_snapshot(state: State<AppState>) -> AppResult<Snapshot> {
 #[tauri::command]
 fn choose_vault_folder(state: State<AppState>) -> AppResult<Snapshot> {
     let folder = rfd::FileDialog::new()
-        .set_title("Choose local-kanban-board vault folder")
+        .set_title("Choose local-kanban-word vault folder")
         .pick_folder()
         .ok_or_else(|| "Vault selection was cancelled.".to_string())?;
     state.set_vault(folder)
@@ -944,7 +944,7 @@ fn export_json(state: State<AppState>) -> AppResult<String> {
     let json = serde_json::to_string_pretty(&bundle).map_err(to_string)?;
     let path = db
         .exports_dir
-        .join(format!("local-kanban-board-export-{}.json", file_stamp()));
+        .join(format!("local-kanban-word-export-{}.json", file_stamp()));
     fs::write(&path, json.as_bytes()).map_err(to_string)?;
     Ok(path.to_string_lossy().to_string())
 }
@@ -1150,7 +1150,7 @@ fn backup_database(state: State<AppState>) -> AppResult<String> {
         .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
         .map_err(to_string)?;
     let backup_path = db.backups_dir.join(format!(
-        "local-kanban-board-backup-{}.sqlite3",
+        "local-kanban-word-backup-{}.sqlite3",
         file_stamp()
     ));
     fs::copy(&db.db_path, &backup_path).map_err(to_string)?;
@@ -1325,7 +1325,7 @@ fn to_string<E: std::fmt::Display>(error: E) -> String {
 }
 
 fn no_vault_error() -> String {
-    "No local-kanban-board vault is configured. Choose a vault folder before using the app."
+    "No local-kanban-word vault is configured. Choose a vault folder before using the app."
         .to_string()
 }
 
@@ -1405,7 +1405,7 @@ pub fn run() {
             restore_database
         ])
         .run(tauri::generate_context!())
-        .expect("error while running local-kanban-board");
+        .expect("error while running local-kanban-word");
 }
 
 #[cfg(test)]
@@ -1414,7 +1414,7 @@ mod tests {
 
     #[test]
     fn sqlite_persists_cards_columns_and_settings_after_reopen() {
-        let dir = std::env::temp_dir().join(format!("local-kanban-board-test-{}", id()));
+        let dir = std::env::temp_dir().join(format!("local-kanban-word-test-{}", id()));
         let db = Database::open_at(dir.clone()).expect("database opens");
         let snapshot = db.snapshot().expect("snapshot loads");
         let board = snapshot.boards.first().expect("seed board exists").clone();
@@ -1480,7 +1480,7 @@ mod tests {
 
     #[test]
     fn vault_path_is_saved_in_stable_config() {
-        let root = std::env::temp_dir().join(format!("local-kanban-board-vault-test-{}", id()));
+        let root = std::env::temp_dir().join(format!("local-kanban-word-vault-test-{}", id()));
         let app_data = root.join("config-home");
         let vault = root.join("work-vault");
         fs::create_dir_all(&app_data).expect("app config dir created");

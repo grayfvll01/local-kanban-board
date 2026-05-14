@@ -227,12 +227,18 @@ textarea,
   border: 1px solid var(--color-border);
   color: var(--color-text-primary);
   box-shadow: 0 10px 30px -28px var(--color-shadow);
+  cursor: grab;
 }
 
 .kanban-card:hover {
   background: var(--color-card-hover-bg);
   border-color: var(--color-border-strong);
   transform: translateY(-1px);
+}
+
+.kanban-card.is-dragging {
+  opacity: 0.58;
+  cursor: grabbing;
 }
 
 .kanban-card.card-editing {

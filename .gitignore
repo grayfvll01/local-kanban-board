@@ -36,10 +36,14 @@ exports/
 attachments/
 
 # Release staging artifacts
-release/**/*.exe
-release/**/*.msi
-release/**/*.zip
-release/**/*.7z
+*.exe
+*.msi
+*.zip
+*.7z
+!releases/windows/*.exe
+!releases/windows/*.msi
+!releases/windows/*.zip
+!releases/windows/*.7z
 
 # Keep icon assets only when they are deliberate project assets.
 # Uncomment this if local generated icons are based on private/personal artwork.

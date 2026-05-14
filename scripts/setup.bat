@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-echo local-kanban-board setup
+echo local-kanban-word setup
 echo ------------------------
 
 where node >nul 2>nul
@@ -53,11 +53,11 @@ if errorlevel 1 (
 )
 popd
 
-if not exist "%APPDATA%\com.local.localkanbanboard" mkdir "%APPDATA%\com.local.localkanbanboard"
+if not exist "%APPDATA%\com.local.localkanbanword" mkdir "%APPDATA%\com.local.localkanbanword"
 
 echo.
 echo Setup complete.
-echo Config directory: %APPDATA%\com.local.localkanbanboard
+echo Config directory: %APPDATA%\com.local.localkanbanword
 echo The app will ask you to choose a vault folder on first launch.
 echo Run scripts\dev.bat to start development mode.
 

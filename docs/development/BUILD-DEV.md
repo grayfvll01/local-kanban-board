@@ -1,6 +1,6 @@
 # Developer Build Guide
 
-This guide is for contributors who want to run or package local-kanban-board from source. Normal users should download the Windows app from GitHub Releases instead.
+This guide is for contributors who want to run or package local-kanban-word from source. Normal users should download the Windows app from GitHub Releases instead.
 
 For architecture details, see [TECHNICAL-REFERENCE.md](TECHNICAL-REFERENCE.md).
 
@@ -38,13 +38,13 @@ scripts\build.bat
 The direct executable is generated at:
 
 ```text
-src-tauri\target\release\local-kanban-board.exe
+src-tauri\target\release\local-kanban-word.exe
 ```
 
 The NSIS installer is generated at:
 
 ```text
-src-tauri\target\release\bundle\nsis\local-kanban-board_0.1.0_x64-setup.exe
+src-tauri\target\release\bundle\nsis\local-kanban-word_0.1.0_x64-setup.exe
 ```
 
 ## Useful Commands
@@ -67,7 +67,7 @@ npm run build
 
 ## App Data And Vault Notes
 
-The selected vault path is stored in the stable app config folder for the Tauri identifier `com.local.localkanbanboard`.
+The selected vault path is stored in the stable app config folder for the Tauri identifier `com.local.localkanbanword`.
 
 The vault itself contains:
 
@@ -78,7 +78,7 @@ backups/
 exports/
 ```
 
-Do not commit personal vaults, generated backups, attachments, or local data files. The repository `.gitignore` excludes common local data and release artifact paths.
+Do not commit personal vaults, generated backups, attachments, or local data files. The repository `.gitignore` excludes common local data and allows deliberate Windows release artifacts only in `releases/windows/`.
 
 ## Release Flow
 
@@ -86,4 +86,11 @@ Do not commit personal vaults, generated backups, attachments, or local data fil
 2. Run `cargo test` from `src-tauri`.
 3. Run `scripts\build.bat`.
 4. Upload the generated Windows executable or installer to GitHub Releases.
-5. Use `release/` only as a local staging area when needed.
+5. If you intentionally stage a build in the repository, copy it into `releases\windows\`.
+
+Example staging commands:
+
+```bat
+copy src-tauri\target\release\local-kanban-word.exe releases\windows\
+copy src-tauri\target\release\bundle\nsis\local-kanban-word_0.1.0_x64-setup.exe releases\windows\
+```

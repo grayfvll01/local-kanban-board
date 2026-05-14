@@ -27,7 +27,7 @@ export function BoardSidebar({
             <LayoutGrid size={22} />
           </div>
           <div>
-            <h1 className="themed-title text-lg font-semibold tracking-normal">local-kanban-board</h1>
+            <h1 className="themed-title text-lg font-semibold tracking-normal">local-kanban-word</h1>
             <p className="themed-muted text-xs">Local vault workspace</p>
           </div>
         </div>

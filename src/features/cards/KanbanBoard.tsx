@@ -1,6 +1,7 @@
 import { format, isPast, isToday, parseISO } from "date-fns";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, MoreHorizontal, Plus, Trash2 } from "lucide-react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, DragEvent } from "react";
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "../../lib/cn";
@@ -30,6 +31,7 @@ export function KanbanBoard({
   onReorderCards,
 }: KanbanBoardProps) {
   const balanced = columns.length > 0 && columns.length <= 5;
+  const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
 
   const moveCard = (card: Card, direction: "left" | "right" | "up" | "down") => {
     const currentColumnIndex = columns.findIndex((column) => column.id === card.column_id);
@@ -65,6 +67,27 @@ export function KanbanBoard({
     onReorderCards(orderCardsByColumns(nextCards, columns));
   };
 
+  const dropCard = (cardId: string, targetColumnId: string, targetCardId?: string) => {
+    const dragged = cards.find((card) => card.id === cardId);
+    if (!dragged) return;
+
+    const cardsWithoutDragged = cards.filter((card) => card.id !== cardId);
+    const targetColumnCards = cardsWithoutDragged
+      .filter((card) => card.column_id === targetColumnId)
+      .sort((a, b) => a.sort_order - b.sort_order);
+    const foundTargetIndex = targetCardId
+      ? targetColumnCards.findIndex((card) => card.id === targetCardId)
+      : -1;
+    const targetIndex = foundTargetIndex >= 0 ? foundTargetIndex : targetColumnCards.length;
+    const moved = { ...dragged, column_id: targetColumnId };
+    const nextTargetColumnCards = [...targetColumnCards];
+    nextTargetColumnCards.splice(targetIndex, 0, moved);
+    const nextCards = cardsWithoutDragged
+      .filter((card) => card.column_id !== targetColumnId)
+      .concat(nextTargetColumnCards);
+    onReorderCards(orderCardsByColumns(nextCards, columns));
+  };
+
   return (
     <div
       className={cn("kanban-scroll", balanced && "is-balanced")}
@@ -90,6 +113,10 @@ export function KanbanBoard({
             onEditColumn={onEditColumn}
             onDeleteColumn={onDeleteColumn}
             onMoveCard={moveCard}
+            draggedCardId={draggedCardId}
+            onDragStart={(cardId) => setDraggedCardId(cardId)}
+            onDragEnd={() => setDraggedCardId(null)}
+            onDropCard={dropCard}
           />
         );
       })}
@@ -113,6 +140,10 @@ function KanbanColumn({
   onEditColumn,
   onDeleteColumn,
   onMoveCard,
+  draggedCardId,
+  onDragStart,
+  onDragEnd,
+  onDropCard,
 }: {
   column: Column;
   cards: Card[];
@@ -125,11 +156,27 @@ function KanbanColumn({
   onEditColumn: (column: Column) => void;
   onDeleteColumn: (id: string) => void;
   onMoveCard: (card: Card, direction: "left" | "right" | "up" | "down") => void;
+  draggedCardId: string | null;
+  onDragStart: (cardId: string) => void;
+  onDragEnd: () => void;
+  onDropCard: (cardId: string, targetColumnId: string, targetCardId?: string) => void;
 }) {
   const overLimit = Boolean(column.wip_limit && totalCount > column.wip_limit);
+  const handleDrop = (event: DragEvent<HTMLElement>, targetCardId?: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const cardId = event.dataTransfer.getData("text/plain") || draggedCardId;
+    if (!cardId) return;
+    onDropCard(cardId, column.id, targetCardId);
+    onDragEnd();
+  };
 
   return (
-    <section className="kanban-column">
+    <section
+      className="kanban-column"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => handleDrop(event)}
+    >
       <div className="column-header">
         <button className="min-w-0 flex-1 text-left" onClick={() => onEditColumn(column)}>
           <div className="flex items-center gap-2">
@@ -161,6 +208,10 @@ function KanbanColumn({
               canMoveDown={cardIndex >= 0 && cardIndex < allColumnCards.length - 1}
               onOpen={() => onOpenCard(card)}
               onMove={(direction) => onMoveCard(card, direction)}
+              isDragging={draggedCardId === card.id}
+              onDragStart={() => onDragStart(card.id)}
+              onDragEnd={onDragEnd}
+              onDrop={(event) => handleDrop(event, card.id)}
             />
           );
         })}
@@ -183,6 +234,10 @@ function KanbanCard({
   canMoveDown,
   onOpen,
   onMove,
+  isDragging,
+  onDragStart,
+  onDragEnd,
+  onDrop,
 }: {
   card: Card;
   canMoveLeft: boolean;
@@ -191,12 +246,28 @@ function KanbanCard({
   canMoveDown: boolean;
   onOpen: () => void;
   onMove: (direction: "left" | "right" | "up" | "down") => void;
+  isDragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDrop: (event: DragEvent<HTMLElement>) => void;
 }) {
   const due = card.due_date ? parseISO(card.due_date) : null;
   const overdue = due ? isPast(due) && !isToday(due) : false;
 
   return (
-    <article className="kanban-card" onDoubleClick={onOpen}>
+    <article
+      className={cn("kanban-card", isDragging && "is-dragging")}
+      draggable
+      onDoubleClick={onOpen}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", card.id);
+        onDragStart();
+      }}
+      onDragEnd={onDragEnd}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={onDrop}
+    >
       <div className="flex items-start gap-3">
         <span className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: card.color }} />
         <button className="min-w-0 flex-1 text-left" onClick={onOpen}>
