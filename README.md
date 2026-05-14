@@ -1,6 +1,6 @@
 # local-kanban-word
 
-local-kanban-word is a local-first desktop Kanban app for Windows. It keeps boards, columns, cards, notes, attachments, backups, and exports in a folder you choose.
+local-kanban-word is a downloadable local Kanban desktop app for Windows. It stores boards, columns, cards, notes, attachments, backups, and exports in a vault folder you choose.
 
 ## Download
 
@@ -8,51 +8,36 @@ Download the latest Windows `.exe` or installer from GitHub Releases.
 
 If this repository includes staged builds, check:
 
-- `releases/windows`
-
-## Screenshots
-
-Screenshots will be added in the `screenshots/` folder when they are available.
+- `releases/windows/`
 
 ## Basic Usage
 
 1. Launch the Windows `.exe`.
-2. Choose or create a local vault folder.
+2. Choose or create a vault folder.
 3. Create boards, columns, and cards.
 4. Add Markdown notes, tags, due dates, priorities, colors, and attachments.
-5. Back up, import, or export your data from Settings.
+5. Back up, import, or export data from Settings.
 
-Your data stays in the selected vault unless you move, back up, export, or share it yourself.
+Your data stays local in the selected vault unless you move, back up, export, or share it yourself.
 
 ## Features
 
 - Local vault storage
 - Boards, columns, and cards
-- Drag-and-drop cards across columns
-- Card movement buttons for precise keyboard-friendly organization
+- Drag-and-drop card organization
 - Themes with dark, light, and system modes
-- Markdown card notes with task checkboxes
+- Markdown card notes
 - File and image attachments
-- Search, filters, tags, priorities, due dates, and color labels
 - JSON import/export
 - Board export to Markdown and CSV
 - Vault backups and restore
 
-## Privacy
+## Help
 
-- No account required
-- No cloud required
-- No telemetry included
-- Data is stored in the vault folder you select
-- Attachments, backups, and exports stay local unless you share them
+User docs live in `docs/user/`:
 
-## Developer Documentation
+- `docs/user/usage.md`
+- `docs/user/vaults.md`
+- `docs/user/themes.md`
 
-Developer setup, build, architecture, and maintenance notes live under `docs/development/`:
-
-- `docs/development/BUILD-DEV.md`
-- `docs/development/TECHNICAL-REFERENCE.md`
-
-## License
-
-No license file is currently included. Add a license before publishing or accepting external contributions.
+Developer setup and technical notes live in `docs/development/`.

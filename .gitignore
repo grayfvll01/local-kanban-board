@@ -1,14 +1,13 @@
-# Dependencies
-node_modules/
-
-# Frontend and desktop build output
-dist/
-build/
-target/
-src-tauri/target/
-src-tauri/gen/
+# App dependencies and build output
+app/node_modules/
+app/dist/
+app/build/
+app/src-tauri/target/
+app/src-tauri/gen/
 
 # Local environment
+app/.env
+app/.env.*
 .env
 .env.*
 *.log
@@ -17,6 +16,7 @@ yarn-debug.log*
 pnpm-debug.log*
 
 # OS/editor files
+CACHEDIR.TAG
 .DS_Store
 Thumbs.db
 
@@ -35,7 +35,7 @@ backups/
 exports/
 attachments/
 
-# Release staging artifacts
+# Ignore executable/archive artifacts except deliberate staged Windows releases
 *.exe
 *.msi
 *.zip
@@ -43,8 +43,3 @@ attachments/
 !releases/windows/*.exe
 !releases/windows/*.msi
 !releases/windows/*.zip
-!releases/windows/*.7z
-
-# Keep icon assets only when they are deliberate project assets.
-# Uncomment this if local generated icons are based on private/personal artwork.
-# src-tauri/icons/*.ico

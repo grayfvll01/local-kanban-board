@@ -13,7 +13,6 @@ interface KanbanBoardProps {
   visibleCards: Card[];
   onOpenCard: (card: Card) => void;
   onCreateCard: (columnId: string) => void;
-  onAddColumn: () => void;
   onEditColumn: (column: Column) => void;
   onDeleteColumn: (id: string) => void;
   onReorderCards: (cards: Card[]) => void;
@@ -25,7 +24,6 @@ export function KanbanBoard({
   visibleCards,
   onOpenCard,
   onCreateCard,
-  onAddColumn,
   onEditColumn,
   onDeleteColumn,
   onReorderCards,
@@ -120,10 +118,6 @@ export function KanbanBoard({
           />
         );
       })}
-      <button className={cn("add-column-button", balanced && "is-balanced")} onClick={onAddColumn}>
-        <Plus size={18} />
-        Add column
-      </button>
     </div>
   );
 }

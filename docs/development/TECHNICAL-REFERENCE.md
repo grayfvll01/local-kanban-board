@@ -6,6 +6,8 @@ This document is for future maintainers and AI-assisted development. The user-fa
 
 local-kanban-word is an offline desktop Kanban app. It uses a Tauri shell, a React/TypeScript frontend, and a Rust command layer that persists data to SQLite inside a user-selected vault folder.
 
+The source application lives in `/app`; run npm, Vite, Tauri, and Cargo workflows from there unless a command explicitly says to start from the repository root.
+
 Architecture goals:
 
 - Local-first behavior with no cloud dependency
@@ -17,39 +19,40 @@ Architecture goals:
 
 ## 2. Technology Stack
 
-- Tauri: desktop wrapper, native window, build packaging, and Rust command bridge. Config lives in `src-tauri/tauri.conf.json`.
-- Rust: backend command implementation in `src-tauri/src/lib.rs`.
+- Tauri: desktop wrapper, native window, build packaging, and Rust command bridge. Config lives in `app/src-tauri/tauri.conf.json`.
+- Rust: backend command implementation in `app/src-tauri/src/lib.rs`.
 - rusqlite: bundled SQLite access, migrations, transactions, WAL configuration, and persistence tests.
 - rfd: native folder picker for vault selection.
 - opener: opens vault files and folders through the OS.
-- React: frontend application and component composition under `src`.
+- React: frontend application and component composition under `app/src`.
 - TypeScript: typed UI state, command inputs, and snapshot models.
 - Vite: frontend development server and production bundling.
-- Tailwind CSS: utility layout classes plus app-specific CSS in `src/styles/app.css`.
+- Tailwind CSS: utility layout classes plus app-specific CSS in `app/src/styles/app.css`.
 - React Markdown and remark-gfm: Markdown preview, task checkboxes, and image rendering in card details.
 - lucide-react: icon set for toolbar, card, and settings controls.
 - Native HTML drag-and-drop: card movement across columns and within columns. Arrow buttons remain available as precise movement controls.
 
 ## 3. Folder Structure
 
-- `src`: React frontend entry, UI components, feature modules, hooks, styles, and shared types.
-- `src/components`: small reusable UI components.
-- `src/features/boards`: board sidebar and board-level interactions.
-- `src/features/cards`: Kanban board surface, card movement controls, and card drawer.
-- `src/db`: typed Tauri invoke wrapper.
-- `src/hooks`: keyboard shortcut and React hook helpers.
-- `src/styles`: theme definitions and CSS variable-backed component styles.
-- `src/types`: shared frontend models matching Rust snapshots.
-- `src-tauri`: Tauri, Rust backend, SQLite persistence, packaging config, and Rust tests.
+- `app`: source code, Tauri config, npm package files, scripts, and frontend build config.
+- `app/src`: React frontend entry, UI components, feature modules, hooks, styles, and shared types.
+- `app/src/components`: small reusable UI components.
+- `app/src/features/boards`: board sidebar and board-level interactions.
+- `app/src/features/cards`: Kanban board surface, drag-and-drop, card movement controls, and card drawer.
+- `app/src/db`: typed Tauri invoke wrapper.
+- `app/src/hooks`: keyboard shortcut and React hook helpers.
+- `app/src/styles`: theme definitions and CSS variable-backed component styles.
+- `app/src/types`: shared frontend models matching Rust snapshots.
+- `app/src-tauri`: Tauri, Rust backend, SQLite persistence, packaging config, and Rust tests.
 - `docs/development`: supplemental technical notes.
-- `scripts`: Windows helper scripts for setup, development, and production builds.
+- `app/scripts`: Windows helper scripts for setup, development, and production builds.
 - `releases/windows`: optional staged Windows executables and installers.
 
 The frontend treats Rust as the source of truth. It loads a full snapshot, performs optimistic local updates for common mutations, and uses reloads for import/restore or larger state changes.
 
 ## 4. Theme System
 
-Themes are centralized in `src/styles/themes.ts`.
+Themes are centralized in `app/src/styles/themes.ts`.
 
 The theme system exposes semantic tokens rather than raw palette names:
 
@@ -96,7 +99,7 @@ Supported modes:
 - Light
 - System
 
-To add a theme, add a family entry to `themeDefinitions`, include both dark and light token maps, add a label to `themeFamilies`, and verify key surfaces such as sidebar, toolbar, Add Column, modals, inputs, and cards.
+To add a theme, add a family entry to `themeDefinitions`, include both dark and light token maps, add a label to `themeFamilies`, and verify key surfaces such as sidebar, toolbar, modals, inputs, columns, and cards.
 
 ## 5. Database Architecture
 
@@ -121,7 +124,7 @@ Relationships:
 
 Persistence flow:
 
-1. React calls a typed function in `src/db/api.ts`.
+1. React calls a typed function in `app/src/db/api.ts`.
 2. The wrapper invokes a Tauri command.
 3. Rust validates the active vault and writes through SQLite.
 4. Rust returns a record or the frontend reloads a snapshot.
@@ -218,26 +221,26 @@ Synchronization:
 
 The build is driven by Tauri:
 
-1. `npm run build` calls `tauri build`.
+1. From `app`, `npm run build` calls `tauri build`.
 2. Tauri runs `npm run build:vite`.
-3. Vite compiles TypeScript and bundles the frontend into `dist`.
+3. Vite compiles TypeScript and bundles the frontend into `app/dist`.
 4. Cargo compiles the Rust app.
-5. Tauri writes the executable and NSIS installer under `src-tauri/target/release`.
+5. Tauri writes the executable and NSIS installer under `app/src-tauri/target/release`.
 
 Expected outputs:
 
 ```text
-src-tauri/target/release/local-kanban-word.exe
-src-tauri/target/release/bundle/nsis/local-kanban-word_0.1.0_x64-setup.exe
+app/src-tauri/target/release/local-kanban-word.exe
+app/src-tauri/target/release/bundle/nsis/local-kanban-word_0.1.0_x64-setup.exe
 ```
 
 GitHub Releases should be the public distribution channel. The `releases/windows` folder is available only for optional, deliberate staging of Windows builds in the repository.
 
 Scripts:
 
-- `scripts/setup.bat`: dependency install and Rust check.
-- `scripts/dev.bat`: local development mode.
-- `scripts/build.bat`: production package build.
+- `app/scripts/setup.bat`: dependency install and Rust check.
+- `app/scripts/dev.bat`: local development mode.
+- `app/scripts/build.bat`: production package build.
 
 ## 10. Future Development Guidelines
 
@@ -248,8 +251,8 @@ Scripts:
 - Add settings as keys in `app_settings`, then expose typed frontend helpers if the setting grows.
 - Add database tables through migrations and tests.
 - Keep Rust commands as the persistence boundary.
-- Prefer small feature modules under `src/features`.
-- Keep frontend models in `src/types` aligned with Rust snapshot structs.
+- Prefer small feature modules under `app/src/features`.
+- Keep frontend models in `app/src/types` aligned with Rust snapshot structs.
 
 ## 11. Known Limitations And Technical Debt
 
@@ -277,7 +280,7 @@ Future agents and maintainers should:
 - Preserve the Tauri/Rust persistence boundary.
 - Avoid coupling UI components directly to filesystem paths.
 - Keep vault switching and database opening in Rust.
-- Keep theme palettes centralized in `src/styles/themes.ts`.
+- Keep theme palettes centralized in `app/src/styles/themes.ts`.
 - Prefer semantic CSS variables over hardcoded colors.
 - Keep user-facing language friendly and avoid implementation details in the app UI.
 - Update tests when touching persistence, vault handling, ordering, import/export, or settings.

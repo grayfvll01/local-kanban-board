@@ -1,6 +1,8 @@
 # Developer Build Guide
 
-This guide is for contributors who want to run or package local-kanban-word from source. Normal users should download the Windows app from GitHub Releases instead.
+This guide is for contributors who want to run or package local-kanban-word from source. Normal users should download the Windows app from GitHub Releases or use staged builds in `releases/windows/`.
+
+The source app lives in `/app`. Run development commands from that folder.
 
 For architecture details, see [TECHNICAL-REFERENCE.md](TECHNICAL-REFERENCE.md).
 
@@ -13,59 +15,59 @@ For architecture details, see [TECHNICAL-REFERENCE.md](TECHNICAL-REFERENCE.md).
 
 If Cargo is installed under `%USERPROFILE%\.cargo\bin` but not on `PATH`, the helper scripts add that folder for the current script run.
 
-## Install Dependencies
+## Setup
 
 ```bat
+cd app
 scripts\setup.bat
 ```
 
 This installs npm packages and runs a Rust project check.
 
-## Run In Development
+## Development
 
 ```bat
+cd app
 scripts\dev.bat
 ```
 
 This starts Vite and Tauri development mode.
 
-## Build The Windows App
+## Build Commands
 
 ```bat
+cd app
+npm run typecheck
+cd src-tauri
+cargo test
+cd ..
 scripts\build.bat
 ```
 
 The direct executable is generated at:
 
 ```text
-src-tauri\target\release\local-kanban-word.exe
+app\src-tauri\target\release\local-kanban-word.exe
 ```
 
 The NSIS installer is generated at:
 
 ```text
-src-tauri\target\release\bundle\nsis\local-kanban-word_0.1.0_x64-setup.exe
+app\src-tauri\target\release\bundle\nsis\local-kanban-word_0.1.0_x64-setup.exe
 ```
 
-## Useful Commands
+## Stage Windows Builds
+
+Public releases should be attached to GitHub Releases. If you intentionally stage a build in the repository, copy it to `/releases/windows`.
+
+From the repository root:
 
 ```bat
-npm run typecheck
-cd src-tauri
-cargo test
-cd ..
-npm run build
+copy app\src-tauri\target\release\local-kanban-word.exe releases\windows\
+copy app\src-tauri\target\release\bundle\nsis\local-kanban-word_0.1.0_x64-setup.exe releases\windows\
 ```
 
-## Troubleshooting
-
-- If `cargo` is not found, install Rust or add `%USERPROFILE%\.cargo\bin` to `PATH`.
-- If native Windows linking fails, verify Visual Studio C++ Build Tools are installed.
-- If Tauri cannot start, verify the WebView2 Runtime is available.
-- If a dev window opens but data is missing, check that a vault folder is selected.
-- If a vault folder was moved or deleted, the app will ask you to choose another vault.
-
-## App Data And Vault Notes
+## Vault Notes
 
 The selected vault path is stored in the stable app config folder for the Tauri identifier `com.local.localkanbanword`.
 
@@ -78,19 +80,4 @@ backups/
 exports/
 ```
 
-Do not commit personal vaults, generated backups, attachments, or local data files. The repository `.gitignore` excludes common local data and allows deliberate Windows release artifacts only in `releases/windows/`.
-
-## Release Flow
-
-1. Run `npm run typecheck`.
-2. Run `cargo test` from `src-tauri`.
-3. Run `scripts\build.bat`.
-4. Upload the generated Windows executable or installer to GitHub Releases.
-5. If you intentionally stage a build in the repository, copy it into `releases\windows\`.
-
-Example staging commands:
-
-```bat
-copy src-tauri\target\release\local-kanban-word.exe releases\windows\
-copy src-tauri\target\release\bundle\nsis\local-kanban-word_0.1.0_x64-setup.exe releases\windows\
-```
+Do not commit personal vaults, generated backups, attachments, exports, or local database files. The repository `.gitignore` excludes common local data and allows deliberate Windows release artifacts only in `releases/windows/`.

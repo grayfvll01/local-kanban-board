@@ -441,7 +441,6 @@ export default function App() {
               visibleCards={visibleCards}
               onOpenCard={(card) => setActiveCardId(card.id)}
               onCreateCard={createCard}
-              onAddColumn={() => openEntityDialog({ type: "column" })}
               onEditColumn={(column) => openEntityDialog({ type: "column", entity: column })}
               onDeleteColumn={async (id) => {
                 await api.deleteColumn(id);
@@ -458,8 +457,8 @@ export default function App() {
             <EmptyState
               title={activeBoard ? "Add your first column" : "Create a board"}
               body="Your workspace is fully local. Boards, cards, attachments, order, and settings stay in your selected vault."
-              action={activeBoard ? "Add column" : "New board"}
-              onAction={() => openEntityDialog({ type: activeBoard ? "column" : "board" })}
+              action={activeBoard ? undefined : "New board"}
+              onAction={activeBoard ? undefined : () => openEntityDialog({ type: "board" })}
             />
           )}
         </div>
