@@ -1,6 +1,7 @@
 import { getCurrentWindow, LogicalPosition, LogicalSize } from "@tauri-apps/api/window";
 import {
   AlertTriangle,
+  CheckCircle2,
   DatabaseBackup,
   Download,
   FileDown,
@@ -8,11 +9,10 @@ import {
   FileText,
   FolderOpen,
   HardDrive,
+  Menu,
   Moon,
   Plus,
-  RefreshCcw,
   Search,
-  Settings2,
   SlidersHorizontal,
   Sun,
   Upload,
@@ -25,6 +25,7 @@ import { BoardSidebar } from "./features/boards/BoardSidebar";
 import { CardDrawer } from "./features/cards/CardDrawer";
 import { KanbanBoard } from "./features/cards/KanbanBoard";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { cn } from "./lib/cn";
 import {
   applyThemeTokens,
   legacyThemeMode,
@@ -53,6 +54,7 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [showFilters, setShowFilters] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [newCardColumnId, setNewCardColumnId] = useState<string | null>(null);
   const [entityDialog, setEntityDialog] = useState<EntityDialogState | null>(null);
@@ -67,7 +69,7 @@ export default function App() {
     setSnapshot(data);
     if (data.vault_required) {
       setSelectedBoardId("");
-      setNotice(data.status_error ?? "Choose a vault folder to start using local-kanban-word.");
+      setNotice(data.status_error ?? "Choose a vault folder to start using Local Kanban.");
       return;
     }
     const storedFilters = safeJson<Filters>(data.settings.filters, defaultFilters);
@@ -99,7 +101,7 @@ export default function App() {
 
   const changeVault = useCallback(async () => {
     const ok = window.confirm(
-      "local-kanban-word will switch to another vault folder. The previous vault will not be deleted.",
+      "Local Kanban will switch to another vault folder. The previous vault will not be deleted.",
     );
     if (!ok) return;
     if (snapshot && !snapshot.vault_required) {
@@ -179,6 +181,20 @@ export default function App() {
     () => filterCards(cards, search, filters),
     [cards, filters, search],
   );
+  const cardCounts = useMemo(
+    () =>
+      (snapshot?.cards ?? []).reduce<Record<string, number>>((counts, card) => {
+        counts[card.board_id] = (counts[card.board_id] ?? 0) + 1;
+        return counts;
+      }, {}),
+    [snapshot?.cards],
+  );
+  const activeFilterCount = [
+    Boolean(filters.tag),
+    filters.priority !== "all",
+    filters.due !== "all",
+    filters.column !== "all",
+  ].filter(Boolean).length;
 
   const createCard = useCallback(
     (columnId: string) => {
@@ -190,6 +206,9 @@ export default function App() {
   );
 
   useKeyboardShortcuts({
+    onNewCard: () => {
+      if (activeBoard && columns[0]) createCard(columns[0].id);
+    },
     onNewColumn: () => {
       if (activeBoard) setEntityDialog({ type: "column" });
     },
@@ -301,7 +320,15 @@ export default function App() {
   };
 
   if (!snapshot) {
-    return <div className="app-shell themed-muted grid h-screen place-items-center">{notice}</div>;
+    return (
+      <div className="app-shell grid h-screen place-items-center">
+        <div className="loading-state" role="status">
+          <span className="loading-mark"><span /></span>
+          <strong>Opening your workspace</strong>
+          <small>{notice}</small>
+        </div>
+      </div>
+    );
   }
 
   if (snapshot.vault_required) {
@@ -320,7 +347,11 @@ export default function App() {
     <div className="app-shell flex h-screen overflow-hidden">
       <BoardSidebar
         boards={boards}
+        cardCounts={cardCounts}
         selectedBoardId={selectedBoardId}
+        vaultPath={snapshot.vault_path}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
         onSelect={setSelectedBoardId}
         onCreate={() => openEntityDialog({ type: "board" })}
         onEdit={(board) => openEntityDialog({ type: "board", entity: board })}
@@ -329,61 +360,76 @@ export default function App() {
           await load();
           setNotice("Board deleted");
         }}
+        onOpenVault={() => void api.openVaultFolder()}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="topbar">
-          <div className="min-w-0">
-            <h2 className="themed-title truncate text-2xl font-semibold">
-              {activeBoard?.name ?? "No board selected"}
-            </h2>
-            {activeBoard?.description ? (
-              <p className="themed-muted truncate text-sm">{activeBoard.description}</p>
-            ) : null}
+          <div className="flex min-w-0 items-center gap-3">
+            <button className="mobile-nav-button icon-button" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation">
+              <Menu size={19} />
+            </button>
+            <div className="board-heading-mark" aria-hidden="true"><span /></div>
+            <div className="min-w-0">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="themed-label text-[10px] font-bold uppercase">Board</span>
+                {activeBoard ? <span className="board-task-count">{cards.length} {cards.length === 1 ? "task" : "tasks"}</span> : null}
+              </div>
+              <h2 className="truncate text-xl font-bold tracking-[-0.025em]">
+                {activeBoard?.name ?? "Choose a board"}
+              </h2>
+              {activeBoard?.description ? <p className="themed-muted mt-0.5 truncate text-xs">{activeBoard.description}</p> : null}
+            </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <div className="searchbox">
+          <div className="topbar-actions">
+            <label className="searchbox" aria-label="Search tasks">
               <Search size={17} />
               <input
                 ref={searchRef}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search title or description"
+                placeholder="Search tasks..."
               />
-            </div>
-            <button className="toolbar-button" onClick={() => setShowFilters((value) => !value)}>
+              <kbd>Ctrl K</kbd>
+            </label>
+            <button
+              className={cn("toolbar-button filter-button", (showFilters || activeFilterCount > 0) && "is-active")}
+              onClick={() => setShowFilters((value) => !value)}
+              aria-expanded={showFilters}
+              aria-label="Filter tasks"
+            >
               <SlidersHorizontal size={16} />
-              Filter
+              <span className="toolbar-label">Filter</span>
+              {activeFilterCount ? <span className="filter-count">{activeFilterCount}</span> : null}
             </button>
             <button
-              className="toolbar-button"
-              disabled={!activeBoard}
-              onClick={() => openEntityDialog({ type: "column" })}
+              className="primary-button new-task-button"
+              disabled={!activeBoard || !columns.length}
+              onClick={() => columns[0] && createCard(columns[0].id)}
+              aria-label="Create task"
             >
               <Plus size={16} />
-              New Column
+              <span className="toolbar-label">New task</span>
             </button>
-            <button className="toolbar-button" onClick={() => setSettingsOpen(true)}>
-              <Settings2 size={16} />
-              Settings
-            </button>
-            <button className="icon-button" onClick={toggleTheme} title="Toggle theme">
+            <button className="icon-button" onClick={toggleTheme} title="Toggle color mode" aria-label="Toggle color mode">
               {resolveThemeMode(themeMode) === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-            </button>
-            <button className="icon-button" onClick={() => void load()} title="Reload from vault">
-              <RefreshCcw size={16} />
             </button>
           </div>
         </header>
 
         {showFilters ? (
-          <section className="filterbar">
+          <section className="filterbar" aria-label="Task filters">
+            <div className="filterbar-summary">
+              <span><SlidersHorizontal size={15} /> Filters</span>
+              <small>{visibleCards.length} of {cards.length} tasks shown</small>
+            </div>
             <label>
               <span>Tag</span>
               <input
                 value={filters.tag}
                 onChange={(event) => setFilters({ ...filters, tag: event.target.value })}
-                placeholder="release"
+                placeholder="e.g. release"
               />
             </label>
             <label>
@@ -427,13 +473,13 @@ export default function App() {
                 ))}
               </select>
             </label>
-            <button className="toolbar-button self-end" onClick={() => setFilters(defaultFilters)}>
-              Reset
+            <button className="clear-filter-button" onClick={() => setFilters(defaultFilters)} disabled={!activeFilterCount}>
+              <X size={15} /> Clear
             </button>
           </section>
         ) : null}
 
-        <div className="min-h-0 flex-1">
+        <div className="board-stage min-h-0 flex-1">
           {activeBoard && columns.length ? (
             <KanbanBoard
               columns={columns}
@@ -441,6 +487,7 @@ export default function App() {
               visibleCards={visibleCards}
               onOpenCard={(card) => setActiveCardId(card.id)}
               onCreateCard={createCard}
+              onCreateColumn={() => openEntityDialog({ type: "column" })}
               onEditColumn={(column) => openEntityDialog({ type: "column", entity: column })}
               onDeleteColumn={async (id) => {
                 await api.deleteColumn(id);
@@ -456,12 +503,19 @@ export default function App() {
           ) : (
             <EmptyState
               title={activeBoard ? "Add your first column" : "Create a board"}
-              body="Your workspace is fully local. Boards, cards, attachments, order, and settings stay in your selected vault."
-              action={activeBoard ? undefined : "New board"}
-              onAction={activeBoard ? undefined : () => openEntityDialog({ type: "board" })}
+              body={activeBoard ? "Use columns to shape your workflow—try To do, In progress, and Done." : "Create a focused space for a project, routine, or idea. Everything stays in your local vault."}
+              action={activeBoard ? "Add first column" : "Create your first board"}
+              onAction={activeBoard ? () => openEntityDialog({ type: "column" }) : () => openEntityDialog({ type: "board" })}
             />
           )}
         </div>
+        <footer className="statusbar" aria-live="polite">
+          <span className="status-message"><CheckCircle2 size={14} /> {notice}</span>
+          <span className="status-summary">
+            {search || activeFilterCount ? `${visibleCards.length} of ${cards.length} visible` : `${cards.length} total tasks`}
+            <span aria-hidden="true">•</span> Local vault
+          </span>
+        </footer>
       </main>
 
       {activeCardId ? (
@@ -557,13 +611,19 @@ function VaultSetup({
 
   return (
     <section className="vault-panel">
-      <div className="themed-icon-tile mx-auto grid h-14 w-14 place-items-center rounded-2xl">
+      <div className="vault-app-mark mx-auto grid h-16 w-16 place-items-center rounded-2xl">
         <HardDrive size={28} />
       </div>
-      <h1 className="themed-title mt-5 text-center text-2xl font-semibold">Choose a Kanban vault</h1>
+      <p className="themed-accent mt-6 text-center text-xs font-bold uppercase tracking-[0.2em]">Welcome to Local Kanban</p>
+      <h1 className="mt-2 text-center text-3xl font-bold tracking-[-0.035em]">Choose where your work lives</h1>
       <p className="themed-muted mt-3 text-center text-sm leading-6">
-        Your vault is the local folder that stores your boards, attachments, backups, and exports.
+        Pick any folder on your computer. Your boards, notes, and attachments stay there—private, portable, and under your control.
       </p>
+      <div className="vault-benefits" aria-label="Vault benefits">
+        <span><CheckCircle2 size={16} /><strong>No sign-in</strong></span>
+        <span><CheckCircle2 size={16} /><strong>Works offline</strong></span>
+        <span><CheckCircle2 size={16} /><strong>Easy to back up</strong></span>
+      </div>
       {error ? (
         <div className="themed-surface-subtle mt-5 flex gap-3 rounded-lg p-3 text-sm themed-warning">
           <AlertTriangle className="mt-0.5 shrink-0" size={17} />
@@ -591,10 +651,10 @@ function VaultSetup({
         }}
       >
         <FolderOpen size={17} />
-        {busy ? "Opening..." : "Choose or create folder"}
+        {busy ? "Opening folder..." : "Choose a folder"}
       </button>
       <p className="themed-muted mt-4 break-all text-center text-xs">
-        Vault choice is remembered in {configPath}
+        You can change this later in Settings. Configuration: {configPath}
       </p>
     </section>
   );
@@ -651,8 +711,8 @@ function SettingsDialog({
   };
 
   return (
-    <div className="dialog-backdrop fixed inset-0 z-50 grid place-items-center backdrop-blur-sm" onMouseDown={onClose}>
-      <section className="dialog-panel settings-panel" onMouseDown={(event) => event.stopPropagation()}>
+    <div className="dialog-backdrop fixed inset-0 z-50 grid place-items-center" onMouseDown={onClose}>
+      <section className="dialog-panel settings-panel" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="Settings">
         <input
           ref={importRef}
           type="file"
@@ -671,14 +731,14 @@ function SettingsDialog({
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0];
-            if (file) void run("restore", () => onRestore(file));
+            if (file && window.confirm("Restore this backup? Your current data will be replaced.")) void run("restore", () => onRestore(file));
             event.currentTarget.value = "";
           }}
         />
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="themed-accent text-xs font-semibold uppercase tracking-[0.22em]">Settings</p>
-            <h2 className="themed-title mt-1 text-lg font-semibold">Vault Management</h2>
+            <p className="themed-accent text-xs font-semibold uppercase tracking-[0.22em]">Preferences</p>
+            <h2 className="mt-1 text-xl font-bold tracking-[-0.02em]">Settings</h2>
           </div>
           <button className="icon-button" onClick={onClose} title="Close settings">
             <X size={17} />
@@ -686,9 +746,7 @@ function SettingsDialog({
         </div>
 
         <div className="themed-panel mt-5 rounded-lg p-4">
-          <span className="themed-label text-xs font-semibold uppercase">
-            Current vault
-          </span>
+          <span className="themed-label text-xs font-semibold uppercase">Current vault</span>
           <p className="themed-subtitle mt-2 break-all text-sm">{snapshot.vault_path}</p>
         </div>
 
@@ -789,9 +847,11 @@ function EntityDialog({
   );
 
   return (
-    <div className="dialog-backdrop fixed inset-0 z-50 grid place-items-center backdrop-blur-sm" onMouseDown={onClose}>
+    <div className="dialog-backdrop fixed inset-0 z-50 grid place-items-center" onMouseDown={onClose}>
       <form
         className="dialog-panel"
+        role="dialog"
+        aria-modal="true"
         onMouseDown={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
@@ -848,7 +908,7 @@ function filterCards(cards: Card[], search: string, filters: Filters) {
   const today = new Date().toISOString().slice(0, 10);
   return cards.filter((card) => {
     if (query && !`${card.title} ${card.description}`.toLowerCase().includes(query)) return false;
-    if (filters.tag && !card.tags.some((tag) => tag.includes(filters.tag.toLowerCase()))) return false;
+    if (filters.tag && !card.tags.some((tag) => tag.toLowerCase().includes(filters.tag.toLowerCase()))) return false;
     if (filters.priority !== "all" && card.priority !== filters.priority) return false;
     if (filters.column !== "all" && card.column_id !== filters.column) return false;
     if (filters.due === "none" && card.due_date) return false;

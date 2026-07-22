@@ -9,6 +9,12 @@ if errorlevel 1 (
 )
 
 pushd "%~dp0.."
+call npm run version:check
+if errorlevel 1 (
+  popd
+  exit /b 1
+)
+
 call npm run build
 if errorlevel 1 (
   popd
@@ -17,8 +23,9 @@ if errorlevel 1 (
 
 echo.
 echo Direct executable:
-echo %CD%\src-tauri\target\release\local-kanban-word.exe
+echo %CD%\src-tauri\target\release\local-kanban.exe
 echo.
 echo Windows installer:
-echo %CD%\src-tauri\target\release\bundle\nsis\local-kanban-word_0.1.0_x64-setup.exe
+for /f "delims=" %%V in ('node -p "require('./package.json').version"') do set "APP_VERSION=%%V"
+echo %CD%\src-tauri\target\release\bundle\nsis\Local Kanban_%APP_VERSION%_x64-setup.exe
 popd

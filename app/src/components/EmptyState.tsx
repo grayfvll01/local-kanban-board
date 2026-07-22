@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { ArrowRight, LayoutPanelTop, Plus } from "lucide-react";
 
 interface EmptyStateProps {
   title: string;
@@ -9,17 +9,21 @@ interface EmptyStateProps {
 
 export function EmptyState({ title, body, action, onAction }: EmptyStateProps) {
   return (
-    <div className="grid h-full place-items-center">
+    <div className="empty-state grid h-full place-items-center p-8">
       <div className="max-w-md text-center">
-        <div className="themed-icon-tile mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl">
-          <Plus size={26} />
+        <div className="empty-state-visual mx-auto mb-6" aria-hidden="true">
+          <span className="empty-state-card card-one" />
+          <span className="empty-state-card card-two" />
+          <span className="empty-state-icon"><LayoutPanelTop size={24} /></span>
         </div>
-        <h2 className="themed-title text-xl font-semibold">{title}</h2>
-        <p className="themed-muted mt-2 text-sm leading-6">{body}</p>
+        <span className="empty-state-kicker">Ready when you are</span>
+        <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em]">{title}</h2>
+        <p className="themed-muted mx-auto mt-3 max-w-sm text-sm leading-6">{body}</p>
         {action && onAction ? (
-          <button className="primary-button mt-6" onClick={onAction}>
+          <button className="primary-button mt-7" onClick={onAction}>
             <Plus size={16} />
             {action}
+            <ArrowRight size={15} />
           </button>
         ) : null}
       </div>

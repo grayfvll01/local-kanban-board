@@ -4,7 +4,7 @@ This document is for future maintainers and AI-assisted development. The user-fa
 
 ## 1. Project Overview
 
-local-kanban-word is an offline desktop Kanban app. It uses a Tauri shell, a React/TypeScript frontend, and a Rust command layer that persists data to SQLite inside a user-selected vault folder.
+Local Kanban is an offline desktop Kanban app. It uses a Tauri shell, a React/TypeScript frontend, and a Rust command layer that persists data to SQLite inside a user-selected vault folder.
 
 The source application lives in `/app`; run npm, Vite, Tauri, and Cargo workflows from there unless a command explicitly says to start from the repository root.
 
@@ -46,7 +46,7 @@ Architecture goals:
 - `app/src-tauri`: Tauri, Rust backend, SQLite persistence, packaging config, and Rust tests.
 - `docs/development`: supplemental technical notes.
 - `app/scripts`: Windows helper scripts for setup, development, and production builds.
-- `releases/windows`: optional staged Windows executables and installers.
+- `.github/workflows`: quality checks and version-tagged Windows releases.
 
 The frontend treats Rust as the source of truth. It loads a full snapshot, performs optimistic local updates for common mutations, and uses reloads for import/restore or larger state changes.
 
@@ -230,11 +230,11 @@ The build is driven by Tauri:
 Expected outputs:
 
 ```text
-app/src-tauri/target/release/local-kanban-word.exe
-app/src-tauri/target/release/bundle/nsis/local-kanban-word_0.1.0_x64-setup.exe
+app/src-tauri/target/release/local-kanban.exe
+app/src-tauri/target/release/bundle/nsis/Local Kanban_1.0.0_x64-setup.exe
 ```
 
-GitHub Releases should be the public distribution channel. The `releases/windows` folder is available only for optional, deliberate staging of Windows builds in the repository.
+GitHub Releases is the only public binary distribution channel. Version tags trigger clean Windows builds and publish a stable `Local-Kanban-Setup.exe` asset.
 
 Scripts:
 

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 
 interface ShortcutHandlers {
+  onNewCard: () => void;
   onNewColumn: () => void;
   onSearch: () => void;
   onSave: () => void;
@@ -13,9 +14,10 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
       const key = event.key.toLowerCase();
       if (event.ctrlKey && key === "n") {
         event.preventDefault();
-        handlers.onNewColumn();
+        if (event.shiftKey) handlers.onNewColumn();
+        else handlers.onNewCard();
       }
-      if (event.ctrlKey && key === "f") {
+      if (event.ctrlKey && (key === "f" || key === "k")) {
         event.preventDefault();
         handlers.onSearch();
       }

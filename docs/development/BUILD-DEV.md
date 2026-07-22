@@ -1,6 +1,6 @@
 # Developer Build Guide
 
-This guide is for contributors who want to run or package local-kanban-word from source. Normal users should download the Windows app from GitHub Releases or use staged builds in `releases/windows/`.
+This guide is for contributors who want to run or package Local Kanban from source. Normal users should use the download link in the repository README.
 
 The source app lives in `/app`. Run development commands from that folder.
 
@@ -47,25 +47,18 @@ scripts\build.bat
 The direct executable is generated at:
 
 ```text
-app\src-tauri\target\release\local-kanban-word.exe
+app\src-tauri\target\release\local-kanban.exe
 ```
 
 The NSIS installer is generated at:
 
 ```text
-app\src-tauri\target\release\bundle\nsis\local-kanban-word_0.1.0_x64-setup.exe
+app\src-tauri\target\release\bundle\nsis\Local Kanban_1.0.0_x64-setup.exe
 ```
 
-## Stage Windows Builds
+## Publish a release
 
-Public releases should be attached to GitHub Releases. If you intentionally stage a build in the repository, copy it to `/releases/windows`.
-
-From the repository root:
-
-```bat
-copy app\src-tauri\target\release\local-kanban-word.exe releases\windows\
-copy app\src-tauri\target\release\bundle\nsis\local-kanban-word_0.1.0_x64-setup.exe releases\windows\
-```
+Synchronize the semantic version with `npm run version:set -- X.Y.Z`, commit it, and push a matching `vX.Y.Z` tag. The release workflow builds the clean source revision and publishes `Local-Kanban-Setup.exe` to GitHub Releases.
 
 ## Vault Notes
 
@@ -80,4 +73,4 @@ backups/
 exports/
 ```
 
-Do not commit personal vaults, generated backups, attachments, exports, or local database files. The repository `.gitignore` excludes common local data and allows deliberate Windows release artifacts only in `releases/windows/`.
+Do not commit personal vaults, generated backups, attachments, exports, local database files, or built executables. The repository `.gitignore` excludes these artifacts.

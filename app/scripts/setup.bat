@@ -1,8 +1,8 @@
 @echo off
 setlocal
 
-echo local-kanban-word setup
-echo ------------------------
+echo Local Kanban setup
+echo ------------------
 
 where node >nul 2>nul
 if errorlevel 1 (

@@ -35,11 +35,8 @@ backups/
 exports/
 attachments/
 
-# Ignore executable/archive artifacts except deliberate staged Windows releases
+# Executables and archives belong in GitHub Releases, never in source control
 *.exe
 *.msi
 *.zip
 *.7z
-!releases/windows/*.exe
-!releases/windows/*.msi
-!releases/windows/*.zip

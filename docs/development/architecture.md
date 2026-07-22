@@ -1,12 +1,12 @@
 # Architecture Notes
 
-local-kanban-word is a local-first Tauri desktop app. The source application lives in `/app`. The frontend is React and TypeScript, and the backend is a Rust command layer over SQLite.
+Local Kanban is a local-first Tauri desktop app. The source application lives in `/app`. The frontend is React and TypeScript, and the backend is a Rust command layer over SQLite.
 
 The main long-form architecture reference now lives in [TECHNICAL-REFERENCE.md](TECHNICAL-REFERENCE.md).
 
 ## Reference Inspiration
 
-The Bunbun reference app uses a Vite/React Kanban interface with browser-local persistence, card detail modals, Markdown rendering, GFM checkboxes, image paste/upload, color-coded cards, and import/export. Those product ideas informed local-kanban-word, but the implementation is original and built for Tauri, vault storage, and SQLite persistence.
+The interface uses React for typed interaction state while Tauri and SQLite provide native, vault-based persistence.
 
 ## Core Layers
 

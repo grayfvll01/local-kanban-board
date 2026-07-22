@@ -1,12 +1,12 @@
 [package]
-name = "local-kanban-word"
-version = "0.1.0"
-description = "A local-first desktop Kanban board"
-authors = ["local-kanban-word"]
+name = "local-kanban"
+version = "1.0.0"
+description = "A private, local-first Kanban board for Windows"
+authors = ["Local Kanban contributors"]
 edition = "2021"
 
 [lib]
-name = "local_kanban_word_lib"
+name = "local_kanban_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

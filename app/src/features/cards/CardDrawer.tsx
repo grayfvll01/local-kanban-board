@@ -108,16 +108,18 @@ export function CardDrawer({
   };
 
   return (
-    <div className="drawer-backdrop fixed inset-0 z-40 flex justify-end backdrop-blur-sm" onMouseDown={onClose}>
+    <div className="drawer-backdrop fixed inset-0 z-40 flex justify-end">
       <section
         className="drawer-panel"
         onMouseDown={(event) => event.stopPropagation()}
-        aria-label="Card details"
+        aria-label="Task details"
+        role="dialog"
+        aria-modal="true"
       >
         <div className="drawer-header flex items-center justify-between border-b px-6 py-4">
           <div className="min-w-0">
             <p className="themed-accent text-xs font-semibold uppercase tracking-[0.22em]">
-              Card Details
+              {draft.id ? "Task details" : "New task"}
             </p>
             <h2 className="themed-title mt-1 truncate text-xl font-semibold">
               {draft.title || "New card"}
@@ -129,7 +131,7 @@ export function CardDrawer({
                 className="icon-button"
                 title="Delete card"
                 onClick={async () => {
-                  if (draft.id) {
+                  if (draft.id && window.confirm(`Delete “${draft.title}”? This cannot be undone.`)) {
                     await onDelete(draft.id);
                     onClose();
                   }
@@ -200,14 +202,15 @@ export function CardDrawer({
                   />
                 </div>
               </label>
-              <label className="field">
+              <div className="field">
                 <span>Color</span>
-                <div className="color-swatch-tray flex h-10 items-center gap-2 rounded-lg px-2">
+                <div className="color-swatch-tray flex h-10 items-center gap-2 rounded-lg px-2" role="group" aria-label="Task color">
                   {colors.map((color) => (
                     <button
                       key={color}
                       type="button"
                       title={color}
+                      aria-label={`Set task color to ${color}`}
                       className={cn(
                         "color-swatch h-5 w-5 rounded-full",
                         draft.color === color && "is-selected",
@@ -218,12 +221,13 @@ export function CardDrawer({
                   ))}
                   <input
                     type="color"
+                    aria-label="Custom task color"
                     value={draft.color}
                     onChange={(event) => setDraft({ ...draft, color: event.target.value })}
                     className="h-6 w-8 border-0 bg-transparent p-0"
                   />
                 </div>
-              </label>
+              </div>
             </div>
 
             <label className="field">
@@ -347,7 +351,7 @@ export function CardDrawer({
 
         <div className="drawer-footer flex items-center justify-between border-t px-6 py-4">
           <p className="themed-muted text-xs">
-            Changes are saved automatically. Press Ctrl+S while editing to save immediately.
+            Press Ctrl+S to save · Esc to close
           </p>
           <button className="primary-button" disabled={saving || !draft.title.trim()} onClick={handleSave}>
             {saving ? <Check size={16} /> : <Save size={16} />}

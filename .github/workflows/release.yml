@@ -1,0 +1,60 @@
+name: Release Windows app
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish Windows installer
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri -> target
+
+      - name: Install dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Verify release version
+        working-directory: app
+        run: npm run version:check -- "${{ github.ref_name }}"
+
+      - name: Typecheck UI
+        working-directory: app
+        run: npm run typecheck
+
+      - name: Build and publish installer
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app
+          tagName: ${{ github.ref_name }}
+          releaseName: Local Kanban ${{ github.ref_name }}
+          releaseBody: Download **Local-Kanban-Setup.exe** below and run it. Your data remains on your computer.
+          releaseDraft: false
+          prerelease: false
+          releaseAssetNamePattern: Local-Kanban-Setup[ext]

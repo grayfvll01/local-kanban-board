@@ -1,8 +1,8 @@
 {
-  "name": "local-kanban-word",
+  "name": "local-kanban",
   "private": true,
-  "version": "0.1.0",
-  "description": "A local-first desktop Kanban board for Windows",
+  "version": "1.0.0",
+  "description": "A private, local-first Kanban board for Windows",
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
@@ -10,7 +10,9 @@
     "build": "tauri build",
     "build:vite": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "version:set": "node scripts/sync-version.mjs",
+    "version:check": "node scripts/sync-version.mjs --check"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.0",

@@ -1,9 +1,21 @@
 import { format, isPast, isToday, parseISO } from "date-fns";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, MoreHorizontal, Plus, Trash2 } from "lucide-react";
-import type { CSSProperties, DragEvent } from "react";
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  CalendarDays,
+  Flag,
+  GripVertical,
+  MoreHorizontal,
+  Paperclip,
+  Pencil,
+  Plus,
+  Tag,
+  Trash2,
+} from "lucide-react";
+import type { CSSProperties, DragEvent, MouseEvent, ReactNode } from "react";
 import { useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { cn } from "../../lib/cn";
 import type { Card, Column } from "../../types";
 
@@ -13,6 +25,7 @@ interface KanbanBoardProps {
   visibleCards: Card[];
   onOpenCard: (card: Card) => void;
   onCreateCard: (columnId: string) => void;
+  onCreateColumn: () => void;
   onEditColumn: (column: Column) => void;
   onDeleteColumn: (id: string) => void;
   onReorderCards: (cards: Card[]) => void;
@@ -24,11 +37,12 @@ export function KanbanBoard({
   visibleCards,
   onOpenCard,
   onCreateCard,
+  onCreateColumn,
   onEditColumn,
   onDeleteColumn,
   onReorderCards,
 }: KanbanBoardProps) {
-  const balanced = columns.length > 0 && columns.length <= 5;
+  const balanced = columns.length > 0 && columns.length <= 4;
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
 
   const moveCard = (card: Card, direction: "left" | "right" | "up" | "down") => {
@@ -59,7 +73,7 @@ export function KanbanBoard({
     const [moved] = reorderedColumnCards.splice(index, 1);
     reorderedColumnCards.splice(targetIndex, 0, moved);
     const nextCards = cards.map((item) => {
-      const nextIndex = reorderedColumnCards.findIndex((card) => card.id === item.id);
+      const nextIndex = reorderedColumnCards.findIndex((nextCard) => nextCard.id === item.id);
       return nextIndex >= 0 ? { ...item, sort_order: nextIndex * 1000 } : item;
     });
     onReorderCards(orderCardsByColumns(nextCards, columns));
@@ -77,9 +91,8 @@ export function KanbanBoard({
       ? targetColumnCards.findIndex((card) => card.id === targetCardId)
       : -1;
     const targetIndex = foundTargetIndex >= 0 ? foundTargetIndex : targetColumnCards.length;
-    const moved = { ...dragged, column_id: targetColumnId };
     const nextTargetColumnCards = [...targetColumnCards];
-    nextTargetColumnCards.splice(targetIndex, 0, moved);
+    nextTargetColumnCards.splice(targetIndex, 0, { ...dragged, column_id: targetColumnId });
     const nextCards = cardsWithoutDragged
       .filter((card) => card.column_id !== targetColumnId)
       .concat(nextTargetColumnCards);
@@ -91,20 +104,19 @@ export function KanbanBoard({
       className={cn("kanban-scroll", balanced && "is-balanced")}
       style={{ "--column-count": columns.length } as CSSProperties}
     >
-      {columns.map((column) => {
+      {columns.map((column, columnIndex) => {
         const columnCards = cards
           .filter((card) => card.column_id === column.id)
           .sort((a, b) => a.sort_order - b.sort_order);
         const filteredCards = visibleCards.filter((card) => card.column_id === column.id);
-        const showFiltered = filteredCards.length !== columnCards.length;
         return (
           <KanbanColumn
             key={column.id}
             column={column}
-            cards={showFiltered ? filteredCards : columnCards}
+            cards={filteredCards.length === columnCards.length ? columnCards : filteredCards}
             allColumnCards={columnCards}
             totalCount={columnCards.length}
-            columnIndex={columns.findIndex((item) => item.id === column.id)}
+            columnIndex={columnIndex}
             columnCount={columns.length}
             onOpenCard={onOpenCard}
             onCreateCard={onCreateCard}
@@ -112,12 +124,16 @@ export function KanbanBoard({
             onDeleteColumn={onDeleteColumn}
             onMoveCard={moveCard}
             draggedCardId={draggedCardId}
-            onDragStart={(cardId) => setDraggedCardId(cardId)}
+            onDragStart={setDraggedCardId}
             onDragEnd={() => setDraggedCardId(null)}
             onDropCard={dropCard}
           />
         );
       })}
+      <button className="add-column-card" onClick={onCreateColumn}>
+        <span><Plus size={19} /></span>
+        Add another column
+      </button>
     </div>
   );
 }
@@ -155,10 +171,13 @@ function KanbanColumn({
   onDragEnd: () => void;
   onDropCard: (cardId: string, targetColumnId: string, targetCardId?: string) => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const overLimit = Boolean(column.wip_limit && totalCount > column.wip_limit);
   const handleDrop = (event: DragEvent<HTMLElement>, targetCardId?: string) => {
     event.preventDefault();
     event.stopPropagation();
+    setDragOver(false);
     const cardId = event.dataTransfer.getData("text/plain") || draggedCardId;
     if (!cardId) return;
     onDropCard(cardId, column.id, targetCardId);
@@ -167,26 +186,55 @@ function KanbanColumn({
 
   return (
     <section
-      className="kanban-column"
+      className={cn("kanban-column", dragOver && "is-drag-over")}
+      aria-label={`${column.name}, ${totalCount} ${totalCount === 1 ? "task" : "tasks"}`}
+      onDragEnter={() => setDragOver(true)}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragOver(false);
+      }}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => handleDrop(event)}
     >
       <div className="column-header">
-        <button className="min-w-0 flex-1 text-left" onClick={() => onEditColumn(column)}>
+        <span className={`column-dot column-dot-${columnIndex % 5}`} aria-hidden="true" />
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="themed-title truncate text-sm font-semibold">{column.name}</h2>
-            <span className={cn("count-pill", overLimit && "is-hot")}>
-              {totalCount}
-              {column.wip_limit ? `/${column.wip_limit}` : ""}
-            </span>
+            <h2 className="truncate text-[13px] font-bold">{column.name}</h2>
+            <span className={cn("count-pill", overLimit && "is-hot")}>{totalCount}</span>
           </div>
+          {column.wip_limit ? (
+            <p className={cn("column-limit", overLimit && "is-hot")}>
+              {overLimit
+                ? "Limit exceeded"
+                : `${column.wip_limit - totalCount} ${column.wip_limit - totalCount === 1 ? "slot" : "slots"} available`}
+            </p>
+          ) : null}
+        </div>
+        <button className="column-add-button" onClick={() => onCreateCard(column.id)} aria-label={`Add task to ${column.name}`}>
+          <Plus size={17} />
         </button>
-        <button className="icon-button-subtle" onClick={() => onCreateCard(column.id)} title="New card">
-          <Plus size={16} />
-        </button>
-        <button className="icon-button-subtle" onClick={() => onDeleteColumn(column.id)} title="Delete column">
-          <Trash2 size={15} />
-        </button>
+        <div className="context-menu-wrap">
+          <button className="icon-button-subtle" onClick={() => setMenuOpen(!menuOpen)} aria-label={`Actions for ${column.name}`} aria-expanded={menuOpen}>
+            <MoreHorizontal size={17} />
+          </button>
+          {menuOpen ? (
+            <div className="context-menu column-context-menu" role="menu">
+              <button role="menuitem" onClick={() => { setMenuOpen(false); onEditColumn(column); }}>
+                <Pencil size={15} /> Edit column
+              </button>
+              <button
+                role="menuitem"
+                className="is-danger"
+                onClick={() => {
+                  setMenuOpen(false);
+                  if (window.confirm(`Delete “${column.name}” and its ${totalCount} tasks? This cannot be undone.`)) onDeleteColumn(column.id);
+                }}
+              >
+                <Trash2 size={15} /> Delete column
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="column-card-list">
@@ -211,8 +259,14 @@ function KanbanColumn({
         })}
         {!cards.length ? (
           <button className="empty-column" onClick={() => onCreateCard(column.id)}>
-            <Plus size={16} />
-            Add a card
+            <span><Plus size={17} /></span>
+            <strong>Add a task</strong>
+            <small>Drop tasks here or create one</small>
+          </button>
+        ) : null}
+        {cards.length ? (
+          <button className="quick-add-card" onClick={() => onCreateCard(column.id)}>
+            <Plus size={16} /> Add task
           </button>
         ) : null}
       </div>
@@ -245,14 +299,17 @@ function KanbanCard({
   onDragEnd: () => void;
   onDrop: (event: DragEvent<HTMLElement>) => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const due = card.due_date ? parseISO(card.due_date) : null;
   const overdue = due ? isPast(due) && !isToday(due) : false;
+  const summary = summarizeMarkdown(card.description);
 
+  const stop = (event: MouseEvent) => event.stopPropagation();
   return (
     <article
       className={cn("kanban-card", isDragging && "is-dragging")}
+      style={{ "--card-accent": card.color } as CSSProperties}
       draggable
-      onDoubleClick={onOpen}
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("text/plain", card.id);
@@ -262,60 +319,66 @@ function KanbanCard({
       onDragOver={(event) => event.preventDefault()}
       onDrop={onDrop}
     >
-      <div className="flex items-start gap-3">
-        <span className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: card.color }} />
-        <button className="min-w-0 flex-1 text-left" onClick={onOpen}>
-          <h3 className="themed-title line-clamp-2 text-sm font-semibold">{card.title}</h3>
-        </button>
-        <button className="icon-button-subtle" onClick={onOpen} title="Open card">
-          <MoreHorizontal size={16} />
-        </button>
-      </div>
-      {card.description ? (
-        <div className="card-markdown mt-3">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{card.description}</ReactMarkdown>
+      <div className="card-accent" aria-hidden="true" />
+      <button className="card-open-hitarea" onClick={onOpen} aria-label={`Open task: ${card.title}`} />
+      <div className="flex items-start gap-2.5">
+        <GripVertical className="card-grip" size={16} aria-hidden="true" />
+        <h3 className="min-w-0 flex-1 text-sm font-bold leading-5">{card.title}</h3>
+        <div className="context-menu-wrap" onClick={stop}>
+          <button className="card-menu-button" onClick={() => setMenuOpen(!menuOpen)} aria-label={`Move ${card.title}`} aria-expanded={menuOpen}>
+            <MoreHorizontal size={17} />
+          </button>
+          {menuOpen ? (
+            <div className="context-menu card-context-menu" role="menu">
+              <span className="context-menu-label">Move task</span>
+              {canMoveLeft ? <MoveAction icon={<ArrowLeft size={15} />} label="Previous column" onClick={() => onMove("left")} /> : null}
+              {canMoveRight ? <MoveAction icon={<ArrowRight size={15} />} label="Next column" onClick={() => onMove("right")} /> : null}
+              {canMoveUp ? <MoveAction icon={<ArrowUp size={15} />} label="Move up" onClick={() => onMove("up")} /> : null}
+              {canMoveDown ? <MoveAction icon={<ArrowDown size={15} />} label="Move down" onClick={() => onMove("down")} /> : null}
+              {!canMoveLeft && !canMoveRight && !canMoveUp && !canMoveDown ? <span className="context-menu-empty">No moves available</span> : null}
+            </div>
+          ) : null}
         </div>
-      ) : null}
-      <div className="mt-4 flex flex-wrap items-center gap-2 pr-24">
-        <span className={cn("priority-pill", `priority-${card.priority}`)}>{card.priority}</span>
-        {due ? (
-          <span className={cn("date-pill", overdue && "is-overdue")}>
-            {format(due, "MMM d")}
-          </span>
-        ) : null}
-        {card.tags.slice(0, 3).map((tag) => (
-          <span key={tag} className="tag-pill">
-            #{tag}
-          </span>
-        ))}
-        {card.attachments.length ? (
-          <span className="tag-pill">{card.attachments.length} files</span>
-        ) : null}
       </div>
-      <div className="card-move-buttons">
-        {canMoveLeft ? (
-          <button className="move-button" onClick={() => onMove("left")} title="Move left">
-            <ArrowLeft size={13} />
-          </button>
+
+      {summary ? <p className="card-summary">{summary}</p> : null}
+
+      <div className="card-meta">
+        <span className={cn("priority-pill", `priority-${card.priority}`)} title={`${card.priority} priority`}>
+          <Flag size={12} fill="currentColor" /> {card.priority}
+        </span>
+        {due ? (
+          <span className={cn("date-pill", overdue && "is-overdue")} title={overdue ? "Overdue" : "Due date"}>
+            <CalendarDays size={12} /> {isToday(due) ? "Today" : format(due, "MMM d")}
+          </span>
         ) : null}
-        {canMoveUp ? (
-          <button className="move-button" onClick={() => onMove("up")} title="Move up">
-            <ArrowUp size={13} />
-          </button>
-        ) : null}
-        {canMoveDown ? (
-          <button className="move-button" onClick={() => onMove("down")} title="Move down">
-            <ArrowDown size={13} />
-          </button>
-        ) : null}
-        {canMoveRight ? (
-          <button className="move-button" onClick={() => onMove("right")} title="Move right">
-            <ArrowRight size={13} />
-          </button>
+        {card.tags.slice(0, 2).map((tag) => (
+          <span key={tag} className="tag-pill"><Tag size={11} />{tag}</span>
+        ))}
+        {card.tags.length > 2 ? <span className="tag-pill">+{card.tags.length - 2}</span> : null}
+        {card.attachments.length ? (
+          <span className="tag-pill" title={`${card.attachments.length} attachments`}>
+            <Paperclip size={11} /> {card.attachments.length}
+          </span>
         ) : null}
       </div>
     </article>
   );
+}
+
+function MoveAction({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+  return <button role="menuitem" onClick={onClick}>{icon}{label}</button>;
+}
+
+function summarizeMarkdown(value: string) {
+  return value
+    .replace(/!\[[^\]]*]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
+    .replace(/[`*_>#~]/g, "")
+    .replace(/(^|\s)-\s+/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 150);
 }
 
 function orderCardsByColumns(cards: Card[], columns: Column[]) {
