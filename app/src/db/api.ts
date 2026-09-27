@@ -1,59 +1,86 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Board, Card, CardInput, Column, Snapshot } from "../types";
+import type {
+  Attachment,
+  Board,
+  Card,
+  CardInput,
+  CardOrderUpdate,
+  Column,
+  ImportSummary,
+  RestoreSummary,
+  Snapshot,
+} from "../types";
 
-const browserPreview = import.meta.env.DEV && new URLSearchParams(window.location.search).has("preview");
+/** `?preview` in `npm run dev:vite` renders sample data without the native app. */
+export const isBrowserPreview =
+  import.meta.env.DEV && new URLSearchParams(window.location.search).has("preview");
+
+export function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error) return error;
+  return "Something went wrong. Please try again.";
+}
+
+async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  if (isBrowserPreview) {
+    throw new Error("This action needs the desktop app.");
+  }
+  try {
+    return await invoke<T>(command, args);
+  } catch (error) {
+    throw new Error(errorMessage(error));
+  }
+}
+
+const previewOnly = <T>(value: T) => (isBrowserPreview ? Promise.resolve(value) : null);
 
 export const api = {
-  loadSnapshot: () => browserPreview ? Promise.resolve(previewSnapshot()) : invoke<Snapshot>("load_snapshot"),
-  chooseVaultFolder: () => invoke<Snapshot>("choose_vault_folder"),
-  setVaultPath: (path: string) => invoke<Snapshot>("set_vault_path", { path }),
-  openVaultFolder: () => browserPreview ? Promise.resolve() : invoke<void>("open_vault_folder"),
+  loadSnapshot: () => previewOnly(previewSnapshot()) ?? call<Snapshot>("load_snapshot"),
+  chooseVaultFolder: () => call<Snapshot | null>("choose_vault_folder"),
+  openVaultFolder: () => previewOnly(undefined) ?? call<void>("open_vault_folder"),
+  setUpdateChecks: (enabled: boolean) =>
+    previewOnly(undefined) ?? call<void>("set_update_checks", { enabled }),
   createBoard: (name: string, description = "") =>
-    invoke<Board>("create_board", { name, description }),
+    call<Board>("create_board", { name, description }),
   updateBoard: (board: Pick<Board, "id" | "name" | "description">) =>
-    invoke<Board>("update_board", board),
-  deleteBoard: (id: string) => invoke<void>("delete_board", { id }),
+    call<Board>("update_board", { id: board.id, name: board.name, description: board.description }),
+  deleteBoard: (id: string) => call<void>("delete_board", { id }),
   createColumn: (boardId: string, name: string) =>
-    invoke<Column>("create_column", { boardId, name }),
+    call<Column>("create_column", { boardId, name }),
   updateColumn: (column: Pick<Column, "id" | "name" | "wip_limit">) =>
-    invoke<Column>("update_column", column),
-  deleteColumn: (id: string) => invoke<void>("delete_column", { id }),
-  reorderColumns: (boardId: string, orderedIds: string[]) =>
-    invoke<void>("reorder_columns", { boardId, orderedIds }),
-  upsertCard: (card: CardInput) => invoke<Card>("upsert_card", { card }),
-  deleteCard: (id: string) => invoke<void>("delete_card", { id }),
-  reorderCards: (
-    updates: Array<{ id: string; column_id: string; sort_order: number }>,
-  ) => browserPreview ? Promise.resolve() : invoke<void>("reorder_cards", { updates }),
-  saveSetting: (key: string, value: string) =>
-    browserPreview ? Promise.resolve() : invoke<void>("save_setting", { keyName: key, value }),
-  addAttachment: (
-    cardId: string,
-    fileName: string,
-    mimeType: string,
-    dataBase64: string,
-  ) =>
-    invoke("add_attachment", {
-      cardId,
-      fileName,
-      mimeType,
-      dataBase64,
+    call<Column>("update_column", {
+      id: column.id,
+      name: column.name,
+      wipLimit: column.wip_limit ?? null,
     }),
-  deleteAttachment: (id: string) => invoke<void>("delete_attachment", { id }),
-  openPath: (path: string) => invoke<void>("open_path", { path }),
-  exportJson: () => invoke<string>("export_json"),
-  importJson: (json: string) => invoke<void>("import_json", { json }),
-  exportBoardMarkdown: (boardId: string) =>
-    invoke<string>("export_board_markdown", { boardId }),
-  exportBoardCsv: (boardId: string) =>
-    invoke<string>("export_board_csv", { boardId }),
-  backupDatabase: () => invoke<string>("backup_database"),
-  restoreDatabase: (dataBase64: string) =>
-    invoke<void>("restore_database", { dataBase64 }),
+  deleteColumn: (id: string) => call<void>("delete_column", { id }),
+  reorderColumns: (boardId: string, orderedIds: string[]) =>
+    previewOnly(undefined) ?? call<void>("reorder_columns", { boardId, orderedIds }),
+  upsertCard: (card: CardInput) => call<Card>("upsert_card", { card }),
+  deleteCard: (id: string) => call<void>("delete_card", { id }),
+  reorderCards: (updates: CardOrderUpdate[]) =>
+    previewOnly(undefined) ?? call<void>("reorder_cards", { updates }),
+  saveSetting: (key: string, value: string) =>
+    previewOnly(undefined) ?? call<void>("save_setting", { keyName: key, value }),
+  addAttachment: (cardId: string, fileName: string, mimeType: string, dataBase64: string) =>
+    call<Attachment>("add_attachment", { cardId, fileName, mimeType, dataBase64 }),
+  attachFiles: (cardId: string) => call<Attachment[]>("attach_files", { cardId }),
+  deleteAttachment: (id: string) => call<void>("delete_attachment", { id }),
+  openAttachment: (id: string) => call<"opened" | "revealed">("open_attachment", { id }),
+  revealPath: (path: string) => call<void>("reveal_path", { path }),
+  openUrl: (url: string) => call<void>("open_url", { url }),
+  exportJson: () => call<string>("export_json"),
+  importJsonFile: () => call<ImportSummary | null>("import_json_file"),
+  exportBoardMarkdown: (boardId: string) => call<string>("export_board_markdown", { boardId }),
+  exportBoardCsv: (boardId: string) => call<string>("export_board_csv", { boardId }),
+  backupDatabase: () => call<string>("backup_database"),
+  restoreBackupFile: () => call<RestoreSummary | null>("restore_backup_file"),
 };
 
 function previewSnapshot(): Snapshot {
   const now = new Date().toISOString();
+  const tomorrow = new Date(Date.now() + 86_400_000);
+  const dueDate = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
   const board = (id: string, name: string, description: string, sort_order: number): Board => ({
     id, name, description, sort_order, created_at: now, updated_at: now,
   });
@@ -101,7 +128,7 @@ function previewSnapshot(): Snapshot {
       card("c1", "backlog", "Polish onboarding flow", "Make the first-run experience clear and reassuring.", "high", 0, ["ux", "launch"]),
       card("c2", "backlog", "Prepare release checklist", "Document the final QA and publishing steps.", "medium", 1000, ["release"]),
       card("c3", "backlog", "Review empty states", "Add useful guidance wherever content has not been created yet.", "low", 2000, ["copy"]),
-      card("c4", "progress", "Finalize Windows build", "Verify the installer on a clean Windows profile.", "urgent", 0, ["windows", "release"], new Date(Date.now() + 86400000).toISOString().slice(0, 10)),
+      card("c4", "progress", "Finalize Windows build", "Verify the installer on a clean Windows profile.", "urgent", 0, ["windows", "release"], dueDate),
       card("c5", "progress", "Accessibility pass", "Check focus order, target sizes, and keyboard-only movement.", "high", 1000, ["a11y"]),
       card("c6", "review", "Proofread download page", "Keep the repository page focused on a single download action.", "medium", 0, ["copy", "release"]),
       card("c7", "done", "Choose visual direction", "A calm, dense workspace with a warm violet accent.", "medium", 0, ["design"]),
@@ -113,5 +140,7 @@ function previewSnapshot(): Snapshot {
     vault_path: "C:\\Users\\you\\Documents\\Kanban Vault",
     vault_required: false,
     config_path: "C:\\Users\\you\\AppData\\Roaming\\Local Kanban\\config.json",
+    app_version: "1.0.0",
+    check_for_updates: true,
   };
 }

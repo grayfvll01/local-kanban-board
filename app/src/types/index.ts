@@ -51,7 +51,6 @@ export interface AppSettings {
   theme_mode?: string;
   search?: string;
   filters?: string;
-  window_state?: string;
 }
 
 export interface Snapshot {
@@ -65,6 +64,8 @@ export interface Snapshot {
   vault_required: boolean;
   config_path: string;
   status_error?: string | null;
+  app_version: string;
+  check_for_updates: boolean;
 }
 
 export interface CardInput {
@@ -79,3 +80,22 @@ export interface CardInput {
   sort_order?: number;
   tags: string[];
 }
+
+export interface CardOrderUpdate {
+  id: string;
+  column_id: string;
+  sort_order: number;
+}
+
+export interface ImportSummary {
+  boards: number;
+  cards: number;
+  attachments: number;
+  backup_path: string;
+}
+
+export interface RestoreSummary {
+  backup_path: string;
+}
+
+export type MoveDirection = "left" | "right" | "up" | "down";

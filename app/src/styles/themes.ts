@@ -351,7 +351,7 @@ export function normalizeThemeFamily(value?: string): ThemeFamily {
 
 export function normalizeThemeMode(value?: string): ThemeMode {
   if (value === "dark" || value === "light" || value === "system") return value;
-  return "dark";
+  return "system";
 }
 
 export function legacyThemeMode(value?: string): ThemeMode | undefined {

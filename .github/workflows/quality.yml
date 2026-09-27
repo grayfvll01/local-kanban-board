@@ -21,10 +21,10 @@ jobs:
         working-directory: app
     steps:
       - name: Check out source
-        uses: actions/checkout@v7
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v5
         with:
           node-version: lts/*
           cache: npm
@@ -32,6 +32,8 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
@@ -47,8 +49,17 @@ jobs:
       - name: Typecheck UI
         run: npm run typecheck
 
+      - name: Test UI logic
+        run: npm test
+
       - name: Build UI
         run: npm run build:vite
 
       - name: Check native application
         run: cargo check --locked --manifest-path src-tauri/Cargo.toml
+
+      - name: Lint native application
+        run: cargo clippy --locked --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+      - name: Test native application
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml

@@ -1,8 +1,8 @@
-name: Release Windows app
+name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*.*.*"]
 
 permissions:
   contents: write
@@ -13,14 +13,16 @@ concurrency:
 
 jobs:
   release:
-    name: Build and publish Windows installer
+    name: Build, sign, and publish the Windows installer
     runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Check out source
-        uses: actions/checkout@v7
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v5
         with:
           node-version: lts/*
           cache: npm
@@ -38,23 +40,57 @@ jobs:
         working-directory: app
         run: npm ci
 
-      - name: Verify release version
+      - name: Verify tag matches app version
         working-directory: app
         run: npm run version:check -- "${{ github.ref_name }}"
 
-      - name: Typecheck UI
-        working-directory: app
-        run: npm run typecheck
+      - name: Verify signing key is configured
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY secret is missing, so updates cannot be signed."
+            exit 1
+          fi
 
-      - name: Build and publish installer
+      - name: Typecheck and test
+        working-directory: app
+        run: |
+          npm run typecheck
+          npm test
+          npm run build:vite
+          cargo test --locked --manifest-path src-tauri/Cargo.toml
+
+      - name: Build and upload installer as a draft
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: app
           tagName: ${{ github.ref_name }}
           releaseName: Local Kanban ${{ github.ref_name }}
-          releaseBody: Download **Local-Kanban-Setup.exe** below and run it. Your data remains on your computer.
-          releaseDraft: false
+          releaseBody: Download **Local-Kanban-Setup.exe** below and run it. Your data stays on your computer.
+          releaseDraft: true
           prerelease: false
           releaseAssetNamePattern: Local-Kanban-Setup[ext]
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+
+      - name: Verify release assets
+        shell: bash
+        run: |
+          assets=$(gh release view "${{ github.ref_name }}" --json assets --jq '.assets[].name')
+          echo "$assets"
+          for name in Local-Kanban-Setup.exe Local-Kanban-Setup.exe.sig latest.json; do
+            echo "$assets" | grep -qx "$name" || { echo "::error::Missing release asset $name"; exit 1; }
+          done
+
+      - name: Publish release
+        shell: bash
+        working-directory: app
+        run: |
+          node scripts/release-notes.mjs "${{ github.ref_name }}" > "$RUNNER_TEMP/notes.md"
+          gh release edit "${{ github.ref_name }}" --notes-file "$RUNNER_TEMP/notes.md" --draft=false --latest

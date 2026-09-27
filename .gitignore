@@ -40,3 +40,8 @@ attachments/
 *.msi
 *.zip
 *.7z
+
+# Signing keys must never be committed
+*.key
+*.key.pub
+*.pem

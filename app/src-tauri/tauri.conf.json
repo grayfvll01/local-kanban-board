@@ -12,24 +12,50 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Local Kanban",
         "width": 1380,
         "height": 860,
         "minWidth": 760,
-        "minHeight": 620
+        "minHeight": 560,
+        "center": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'",
+      "devCsp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": []
+      }
     }
   },
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
+    "publisher": "Local Kanban",
+    "copyright": "Copyright (c) 2026 Local Kanban contributors. MIT License.",
+    "category": "Productivity",
+    "shortDescription": "A private, local-first Kanban board",
+    "longDescription": "Local Kanban is a fast, private Kanban board for Windows. Boards, notes, and attachments stay in a folder you choose. No account and no cloud.",
+    "icon": ["icons/icon.ico"],
     "windows": {
       "nsis": {
         "displayLanguageSelector": false,
         "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlGQTFGNjYyNzUzNUNCRjgKUldUNHl6VjFZdmFobjZDay9OVU5YNkc4U1FocXBWOFRicFBxdkY5ZkhncTR3L1hFdFp2bTllL3MK",
+      "endpoints": [
+        "https://github.com/grayfvll01/local-kanban-board/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
       }
     }
   }

@@ -20,7 +20,8 @@ Apply these rules to every product, code, documentation, and release change in t
 ## Engineering quality
 
 - Keep React components typed and warnings-free. Avoid duplicating business state outside the Rust/SQLite boundary.
-- Run `npm run version:check`, `npm run typecheck`, `npm run build:vite`, and `cargo check --locked --manifest-path src-tauri/Cargo.toml` before merging.
+- Run `npm run check` (version check, typecheck, UI tests, UI build, `cargo check --locked`) and `npm run test:rust` from `app` before merging.
+- Add a schema migration step and a test for any vault format change. Import and restore must back up first and validate before replacing data.
 - Keep generated build output and executable artifacts out of Git; publish installers through GitHub Releases.
 - Prefer the smallest dependency-free implementation that keeps behavior understandable and testable.
 
@@ -28,7 +29,8 @@ Apply these rules to every product, code, documentation, and release change in t
 
 - Use semantic versions. Run `npm run version:set -- X.Y.Z`, review all synchronized files, then commit.
 - Tag the release commit `vX.Y.Z`. The tag version must equal the application version or the release pipeline must fail.
-- Let `.github/workflows/release.yml` build and publish the installer. Never attach locally built binaries to a release.
+- Let `.github/workflows/release.yml` build, sign, and publish the installer and `latest.json`. Never attach locally built binaries to a release. See `docs/development/RELEASING.md`.
+- Never commit the updater signing key. It lives in the `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` Actions secrets.
 - Keep release notes brief and user-facing. The stable asset name must remain `Local-Kanban-Setup.exe` so the README download link never changes.
 
 ## Primary standards

@@ -56,9 +56,18 @@ The NSIS installer is generated at:
 app\src-tauri\target\release\bundle\nsis\Local Kanban_1.0.0_x64-setup.exe
 ```
 
+## Checks
+
+Run the same checks as CI from `app`:
+
+```bat
+npm run check
+npm run test:rust
+```
+
 ## Publish a release
 
-Synchronize the semantic version with `npm run version:set -- X.Y.Z`, commit it, and push a matching `vX.Y.Z` tag. The release workflow builds the clean source revision and publishes `Local-Kanban-Setup.exe` to GitHub Releases.
+See [RELEASING.md](RELEASING.md).
 
 ## Vault Notes
 

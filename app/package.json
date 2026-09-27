@@ -11,11 +11,17 @@
     "build:vite": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "test": "node --test tests/board.test.ts",
+    "test:rust": "cargo test --locked --manifest-path src-tauri/Cargo.toml",
+    "check": "npm run version:check && npm run typecheck && npm test && npm run build:vite && cargo check --locked --manifest-path src-tauri/Cargo.toml",
     "version:set": "node scripts/sync-version.mjs",
-    "version:check": "node scripts/sync-version.mjs --check"
+    "version:check": "node scripts/sync-version.mjs --check",
+    "release:notes": "node scripts/release-notes.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.13.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.511.0",
@@ -34,5 +40,13 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "vite": "^6.3.5"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grayfvll01/local-kanban-board.git"
+  },
+  "engines": {
+    "node": ">=22.18"
   }
 }
