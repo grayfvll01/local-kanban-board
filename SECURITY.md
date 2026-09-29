@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Only the [latest release](https://github.com/grayfvll01/local-kanban-board/releases/latest) receives fixes. The app updates itself, so staying current is automatic unless update checks are turned off.
+Only the [latest release](https://github.com/grayfvll01/local-kanban-board/releases/latest) receives fixes. The app checks for updates shortly after it starts (unless turned off in Settings) and offers new versions in the status bar. Install updates when they are offered.
 
 ## Reporting a vulnerability
 
@@ -12,5 +12,6 @@ Please report security issues privately through [GitHub security advisories](htt
 
 - Local Kanban never uploads your data. The only network request is the optional update check to GitHub Releases.
 - Updates are verified against a signing key embedded in the app before they are installed.
-- Attachments that are executables or scripts are shown in Explorer instead of being launched.
+- Only common document and media attachments open directly. Every other file type is shown in Explorer instead of being launched.
+- Web images in task notes are never loaded automatically, so viewing notes makes no network requests.
 - The interface runs under a strict content security policy and can only open files inside the active vault.

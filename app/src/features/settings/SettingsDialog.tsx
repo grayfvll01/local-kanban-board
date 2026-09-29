@@ -15,7 +15,17 @@ import {
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import { handleModalKeyDown, useModalFocus } from "../../components/Dialog";
-import { themeFamilies, themeModes, type ThemeFamily, type ThemeMode } from "../../styles/themes";
+import { cn } from "../../lib/cn";
+import {
+  layoutModes,
+  resolveThemeMode,
+  themeDefinitions,
+  themeFamilies,
+  themeModes,
+  type LayoutMode,
+  type ThemeFamily,
+  type ThemeMode,
+} from "../../styles/themes";
 import type { Board, Snapshot } from "../../types";
 import type { UpdateState } from "../updates/useUpdater";
 
@@ -26,9 +36,11 @@ interface SettingsDialogProps {
   activeBoard?: Board;
   themeFamily: ThemeFamily;
   themeMode: ThemeMode;
+  layout: LayoutMode;
   update: UpdateState;
   onThemeFamilyChange: (theme: ThemeFamily) => void;
   onThemeModeChange: (mode: ThemeMode) => void;
+  onLayoutChange: (layout: LayoutMode) => void;
   onClose: () => void;
   onChangeVault: () => Promise<void>;
   onOpenVault: () => Promise<void>;
@@ -91,24 +103,66 @@ export function SettingsDialog(props: SettingsDialogProps) {
         </div>
 
         <SettingsSection title="Appearance">
-          <div className="grid grid-cols-2 gap-3">
-            <label className="field">
-              <span>Theme</span>
-              <select value={props.themeFamily} onChange={(event) => props.onThemeFamilyChange(event.target.value as ThemeFamily)}>
-                {themeFamilies.map((item) => (
-                  <option key={item.id} value={item.id}>{item.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Mode</span>
-              <select value={props.themeMode} onChange={(event) => props.onThemeModeChange(event.target.value as ThemeMode)}>
-                {themeModes.map((item) => (
-                  <option key={item.id} value={item.id}>{item.label}</option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <fieldset className="appearance-group">
+            <legend>Mode</legend>
+            <div className="choice-grid">
+              {themeModes.map((item) => (
+                <label key={item.id} className={cn("choice-option", props.themeMode === item.id && "is-selected")}>
+                  <input
+                    type="radio"
+                    name="theme-mode"
+                    className="visually-hidden-input"
+                    checked={props.themeMode === item.id}
+                    onChange={() => props.onThemeModeChange(item.id)}
+                  />
+                  <strong>{item.label}</strong>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset className="appearance-group">
+            <legend>Layout</legend>
+            <div className="choice-grid">
+              {layoutModes.map((item) => (
+                <label key={item.id} className={cn("choice-option", props.layout === item.id && "is-selected")}>
+                  <input
+                    type="radio"
+                    name="layout"
+                    className="visually-hidden-input"
+                    checked={props.layout === item.id}
+                    onChange={() => props.onLayoutChange(item.id)}
+                  />
+                  <strong>{item.label}</strong>
+                  <small>{item.description}</small>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset className="appearance-group">
+            <legend>Theme</legend>
+            <div className="theme-grid">
+              {themeFamilies.map((item) => {
+                const tokens = themeDefinitions[item.id][resolveThemeMode(props.themeMode)];
+                const selected = props.themeFamily === item.id;
+                return (
+                  <label key={item.id} className={cn("theme-option", selected && "is-selected")}>
+                    <input
+                      type="radio"
+                      name="theme-family"
+                      className="visually-hidden-input"
+                      checked={selected}
+                      onChange={() => props.onThemeFamilyChange(item.id)}
+                    />
+                    <span className="theme-preview" style={{ background: tokens.boardBg }} aria-hidden="true">
+                      <span style={{ background: tokens.cardBg, borderColor: tokens.borderStrong }} />
+                      <span style={{ background: tokens.accent }} />
+                    </span>
+                    <span className="theme-name">{item.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
         </SettingsSection>
 
         <SettingsSection title="Vault" description="Everything is stored in this folder on your computer.">

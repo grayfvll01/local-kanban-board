@@ -1,7 +1,7 @@
 {
   "name": "local-kanban",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A private, local-first Kanban board for Windows",
   "type": "module",
   "scripts": {
@@ -11,12 +11,13 @@
     "build:vite": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/board.test.ts",
+    "test": "node --test tests/board.test.ts tests/themes.test.ts",
     "test:rust": "cargo test --locked --manifest-path src-tauri/Cargo.toml",
-    "check": "npm run version:check && npm run typecheck && npm test && npm run build:vite && cargo check --locked --manifest-path src-tauri/Cargo.toml",
+    "check": "npm run version:check && npm run typecheck && npm test && npm run build:vite && cargo check --locked --manifest-path src-tauri/Cargo.toml && npm run lint:rust",
     "version:set": "node scripts/sync-version.mjs",
     "version:check": "node scripts/sync-version.mjs --check",
-    "release:notes": "node scripts/release-notes.mjs"
+    "release:notes": "node scripts/release-notes.mjs",
+    "lint:rust": "cargo clippy --locked --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.0",

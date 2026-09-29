@@ -19,6 +19,6 @@ if (start >= 0) {
 
 const download =
   "**Download:** [Local-Kanban-Setup.exe](https://github.com/grayfvll01/local-kanban-board/releases/latest/download/Local-Kanban-Setup.exe). " +
-  "Run it and choose a vault folder. Existing installs update automatically.";
+  "Run it and choose a vault folder. Existing installs offer the update in the status bar.";
 
 console.log([body.join("\n").trim() || "Maintenance release.", download].join("\n\n"));

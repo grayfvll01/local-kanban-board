@@ -22,6 +22,11 @@ export function useModalFocus(ref: RefObject<HTMLElement | null>) {
     target?.focus();
     return () => {
       if (opener?.isConnected) opener.focus();
+      // If the opener is gone, keep focus inside whichever modal is still open.
+      if (document.activeElement === document.body || !document.activeElement) {
+        const modals = document.querySelectorAll<HTMLElement>('[aria-modal="true"]');
+        modals[modals.length - 1]?.focus();
+      }
     };
   }, [ref]);
 }

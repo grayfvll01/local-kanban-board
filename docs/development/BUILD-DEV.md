@@ -8,8 +8,8 @@ For architecture details, see [TECHNICAL-REFERENCE.md](TECHNICAL-REFERENCE.md).
 
 ## Prerequisites
 
-- Node.js with npm
-- Rust toolchain with Cargo
+- Node.js 22.18 or later with npm
+- Rust 1.90 or later with Cargo
 - Visual Studio C++ Build Tools
 - WebView2 Runtime, usually already installed on modern Windows
 
@@ -64,6 +64,12 @@ Run the same checks as CI from `app`:
 npm run check
 npm run test:rust
 ```
+
+`npm run check` includes `cargo clippy` with warnings treated as errors.
+
+## Signing
+
+Release builds are signed so installed copies can verify updates. `scripts\build.bat` signs the installer when `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` are set. Without them it makes an unsigned local build that works but cannot be offered as an update. Official releases are built only by the release workflow; see [RELEASING.md](RELEASING.md).
 
 ## Publish a release
 

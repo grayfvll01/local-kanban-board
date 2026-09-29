@@ -1,12 +1,12 @@
 [package]
 name = "local-kanban"
-version = "1.0.0"
+version = "1.1.0"
 description = "A private, local-first Kanban board for Windows"
 authors = ["Local Kanban contributors"]
 license = "MIT"
 repository = "https://github.com/grayfvll01/local-kanban-board"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.90"
 
 [lib]
 name = "local_kanban_lib"

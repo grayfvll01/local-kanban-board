@@ -15,7 +15,12 @@ if errorlevel 1 (
   exit /b 1
 )
 
-call npm run build
+if defined TAURI_SIGNING_PRIVATE_KEY (
+  call npm run build
+) else (
+  echo NOTE: TAURI_SIGNING_PRIVATE_KEY is not set, so this local build is not signed for updates.
+  call npx tauri build --config src-tauri/tauri.unsigned.conf.json
+)
 if errorlevel 1 (
   popd
   exit /b 1

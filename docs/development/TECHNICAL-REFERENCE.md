@@ -1,6 +1,6 @@
 # Technical Reference
 
-This document is for future maintainers and AI-assisted development. The user-facing overview is in [../../README.md](../../README.md), and build instructions are in [BUILD-DEV.md](BUILD-DEV.md).
+This document is for future maintainers. The user-facing overview is in [../../README.md](../../README.md), and build instructions are in [BUILD-DEV.md](BUILD-DEV.md).
 
 ## 1. Project Overview
 
@@ -30,7 +30,7 @@ Architecture goals:
 - Tailwind CSS: utility layout classes plus app-specific CSS in `app/src/styles/app.css`.
 - React Markdown and remark-gfm: Markdown preview, task checkboxes, and image rendering in card details.
 - lucide-react: icon set for toolbar, card, and settings controls.
-- Native HTML drag-and-drop: card movement across columns and within columns. Arrow buttons remain available as precise movement controls.
+- Native HTML drag-and-drop: card movement across columns and within columns. The task ••• menu and Alt+Arrow keys are the non-drag alternative.
 
 ## 3. Folder Structure
 
@@ -112,7 +112,7 @@ Tables:
 - `cards`: card metadata, column relationship, priority, due date, color, and card ordering.
 - `card_tags`: normalized card tags.
 - `attachments`: attachment metadata and vault file paths.
-- `app_settings`: selected board, search/filter state, theme selection, and window state.
+- `app_settings`: selected board, search/filter state, theme, mode, and layout.
 
 Relationships:
 
@@ -138,7 +138,7 @@ SQLite configuration:
 - Busy timeout
 - Transactions for grouped writes, import, setup, and ordering changes
 
-Migration strategy is currently inline `CREATE TABLE IF NOT EXISTS` statements in `Database::migrate`. Future schema changes should add explicit version tracking before destructive or multi-step migrations are introduced.
+The schema version lives in `PRAGMA user_version` (`SCHEMA_VERSION = 1` in `lib.rs`). `Database::migrate` stamps unversioned vaults from before versioning as version 1 without changing rows, and refuses vaults and backups from a newer version. A schema change means incrementing `SCHEMA_VERSION`, adding a step to `migrate`, and adding a test.
 
 ## 6. Vault System
 
@@ -160,7 +160,8 @@ Vault initialization happens in `Database::open_at`:
 3. Open `kanban.sqlite`.
 4. Configure SQLite.
 5. Run migrations.
-6. Seed starter content if the database is empty.
+6. Seed starter content only when a brand-new database is created.
+7. Save a daily automatic backup (the 10 most recent are kept).
 
 The selected vault path is stored in the app config folder for identifier `com.local.localkanbanword`. The vault path is not stored in the database because it is needed before the database can be opened.
 
@@ -168,22 +169,21 @@ When the vault is missing or cannot be opened, the snapshot marks `vault_require
 
 ## 7. Drag-And-Drop And Card Movement
 
-Cards support drag-and-drop and explicit movement buttons:
+Cards support drag-and-drop, a menu, and keyboard movement:
 
 - Drag a card onto another card to place it before that card.
 - Drag a card into a column to place it at the end.
-- Left and right buttons move a card to adjacent columns.
-- Up and down buttons reorder a card inside its current column.
-- Buttons are hidden when movement is not possible.
+- The task ••• menu has Previous/Next column and Move up/down. Items are hidden when a move is not possible.
+- With a task focused, Alt+Left/Right moves it between columns and Alt+Up/Down reorders it. Focus stays on the moved task.
 
 Movement flow:
 
 1. `KanbanBoard` computes available movement per card.
-2. Drag/drop or button movement creates a normalized card list.
+2. Drag/drop, menu, or keyboard movement creates a normalized card list (`app/src/lib/board.ts`).
 3. `App.reorderCards` updates local state.
 4. Rust persists `column_id` and `sort_order` through `reorder_cards`.
 
-Column creation and deletion are handled through Tauri commands. Column drag reordering is not currently exposed in the UI, although the backend has a `reorder_columns` command.
+Column creation and deletion are handled through Tauri commands. A column's ••• menu moves it left or right through `reorder_columns`. Columns cannot be dragged.
 
 Keep ordering normalization in one place and persist only the final `column_id` and `sort_order` changes. If movement rules become more complex, consider moving to a dedicated drag-and-drop library while preserving Rust as the persistence boundary.
 
@@ -256,9 +256,9 @@ Scripts:
 
 ## 11. Known Limitations And Technical Debt
 
-- Column reordering exists in backend shape but is not currently exposed in the UI.
+- Columns can be moved from their menu but not by dragging.
 - Drag-and-drop uses native browser events rather than a dedicated drag-and-drop library.
-- Schema migrations are currently simple idempotent table creation.
+- Only schema version 1 exists so far; there are no multi-step migrations yet.
 - There is no cloud sync or multi-device conflict resolution.
 - There is no built-in encrypted vault mode.
 - Existing attachments are stored as normal files in the vault.
@@ -269,12 +269,13 @@ Scripts:
 - No telemetry is implemented.
 - No cloud sync is implemented.
 - Attachments are copied into the selected vault.
-- Opening files is restricted to files under the active vault.
+- Opening files is restricted to files under the active vault. Only common document and media types open directly; everything else is shown in Explorer.
+- Web images in task notes are never fetched automatically; they appear as links.
 - A user who shares a vault shares its boards, attachments, exports, and backups.
 
-## 13. AI And Developer Continuation Guidance
+## 13. Maintainer Guidance
 
-Future agents and maintainers should:
+Maintainers should:
 
 - Read existing patterns before adding abstractions.
 - Preserve the Tauri/Rust persistence boundary.

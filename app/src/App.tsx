@@ -37,11 +37,13 @@ import {
 } from "./lib/board";
 import { cn } from "./lib/cn";
 import {
+  applyLayout,
   applyThemeTokens,
   legacyThemeMode,
+  normalizeLayout,
   normalizeThemeFamily,
   normalizeThemeMode,
-  resolveThemeMode,
+  type LayoutMode,
   type ThemeFamily,
   type ThemeMode,
 } from "./styles/themes";
@@ -52,6 +54,7 @@ interface Status {
   kind: StatusKind;
   message: string;
   path?: string;
+  seq: number;
 }
 
 type EntityDialogState = { type: "board"; entity?: Board } | { type: "column"; entity?: Column };
@@ -69,7 +72,9 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [themeFamily, setThemeFamily] = useState<ThemeFamily>("default");
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
-  const [status, setStatus] = useState<Status>({ kind: "info", message: "Ready" });
+  const [layout, setLayout] = useState<LayoutMode>("comfortable");
+  const [status, setStatus] = useState<Status>({ kind: "info", message: "Ready", seq: 0 });
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches);
   const [toast, setToast] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const sessionRef = useRef(0);
@@ -77,7 +82,7 @@ export default function App() {
   const updater = useUpdater(Boolean(snapshot?.check_for_updates));
 
   const notify = useCallback((kind: StatusKind, message: string, path?: string) => {
-    setStatus({ kind, message, path });
+    setStatus((previous) => ({ kind, message, path, seq: previous.seq + 1 }));
     if (kind === "error") setToast(message);
   }, []);
 
@@ -87,6 +92,7 @@ export default function App() {
     if (data.vault_required) {
       setSelectedBoardId("");
       applyThemeTokens("default", "system");
+      applyLayout("comfortable");
       return;
     }
     setFilters(normalizeFilters(safeJson(data.settings.filters)));
@@ -95,9 +101,12 @@ export default function App() {
     setSelectedBoardId(data.boards.some((board) => board.id === stored) ? stored! : data.boards[0]?.id ?? "");
     const family = normalizeThemeFamily(data.settings.theme_family ?? data.settings.theme);
     const mode = normalizeThemeMode(data.settings.theme_mode ?? legacyThemeMode(data.settings.theme));
+    const nextLayout = normalizeLayout(data.settings.layout);
     setThemeFamily(family);
     setThemeMode(mode);
+    setLayout(nextLayout);
     applyThemeTokens(family, mode);
+    applyLayout(nextLayout);
   }, []);
 
   const load = useCallback(async () => {
@@ -164,7 +173,10 @@ export default function App() {
   useEffect(() => {
     if (themeMode !== "system") return;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => applyThemeTokens(themeFamily, "system");
+    const onChange = () => {
+      setSystemDark(media.matches);
+      applyThemeTokens(themeFamily, "system");
+    };
     media.addEventListener("change", onChange);
     return () => media.removeEventListener("change", onChange);
   }, [themeFamily, themeMode]);
@@ -179,7 +191,12 @@ export default function App() {
     [snapshot?.cards, selectedBoardId],
   );
   const activeBoard = boards.find((board) => board.id === selectedBoardId);
-  const visibleCards = useMemo(() => filterCards(cards, search, filters), [cards, filters, search]);
+  // A column filter left over from another board must not hide every task on this one.
+  const effectiveFilters = useMemo(
+    () => (filters.column !== "all" && !columns.some((column) => column.id === filters.column) ? { ...filters, column: "all" } : filters),
+    [filters, columns],
+  );
+  const visibleCards = useMemo(() => filterCards(cards, search, effectiveFilters), [cards, effectiveFilters, search]);
   const cardCounts = useMemo(
     () =>
       (snapshot?.cards ?? []).reduce<Record<string, number>>((counts, card) => {
@@ -188,7 +205,8 @@ export default function App() {
       }, {}),
     [snapshot?.cards],
   );
-  const filterCount = countFilters(filters);
+  const filterCount = countFilters(effectiveFilters);
+  const resolvedMode = themeMode === "system" ? (systemDark ? "dark" : "light") : themeMode;
   const drawerCard = drawer?.cardId ? snapshot?.cards.find((card) => card.id === drawer.cardId) ?? null : null;
 
   // Close the drawer if its task disappeared (for example after a restore).
@@ -302,6 +320,12 @@ export default function App() {
     api.saveSetting("theme_mode", next).catch(() => undefined);
   };
 
+  const changeLayout = (next: LayoutMode) => {
+    setLayout(next);
+    applyLayout(next);
+    api.saveSetting("layout", next).catch(() => undefined);
+  };
+
   const exported = (label: string) => async (path: string) => notify("success", `${label} saved`, path);
 
   const installUpdate = async () => {
@@ -313,7 +337,8 @@ export default function App() {
     });
     if (ok) {
       setDrawer(null);
-      await updater.install();
+      const failure = await updater.install();
+      if (failure) notify("error", failure);
     }
   };
 
@@ -443,11 +468,11 @@ export default function App() {
             <button
               type="button"
               className="icon-button"
-              onClick={() => changeThemeMode(resolveThemeMode(themeMode) === "dark" ? "light" : "dark")}
-              title={resolveThemeMode(themeMode) === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              aria-label={resolveThemeMode(themeMode) === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={() => changeThemeMode(resolvedMode === "dark" ? "light" : "dark")}
+              title={resolvedMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={resolvedMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >
-              {resolveThemeMode(themeMode) === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+              {resolvedMode === "dark" ? <Sun size={16} /> : <Moon size={16} />}
             </button>
           </div>
         </header>
@@ -483,7 +508,7 @@ export default function App() {
             </label>
             <label>
               <span>Column</span>
-              <select value={filters.column} onChange={(event) => setFilters({ ...filters, column: event.target.value })}>
+              <select value={effectiveFilters.column} onChange={(event) => setFilters({ ...filters, column: event.target.value })}>
                 <option value="all">All</option>
                 {columns.map((column) => (
                   <option key={column.id} value={column.id}>{column.name}</option>
@@ -532,7 +557,7 @@ export default function App() {
         <footer className="statusbar">
           <span className={cn("status-message", `is-${status.kind}`)} role="status" aria-live="polite">
             {statusIcon}
-            <span className="truncate">{status.message}</span>
+            <span key={status.seq} className="truncate">{status.message}</span>
             {status.path ? (
               <button type="button" className="link-button" onClick={() => void run(() => api.revealPath(status.path!))}>
                 Show in folder
@@ -592,9 +617,11 @@ export default function App() {
           activeBoard={activeBoard}
           themeFamily={themeFamily}
           themeMode={themeMode}
+          layout={layout}
           update={updater.state}
           onThemeFamilyChange={changeThemeFamily}
           onThemeModeChange={changeThemeMode}
+          onLayoutChange={changeLayout}
           onClose={() => setSettingsOpen(false)}
           onChangeVault={async () => {
             const data = await run(api.chooseVaultFolder);
@@ -623,8 +650,17 @@ export default function App() {
             }
           }}
           onExportJson={async () => {
-            const path = await run(api.exportJson);
-            if (path) await exported("JSON export")(path);
+            const result = await run(api.exportJson);
+            if (!result) return;
+            if (result.missing_attachments) {
+              notify(
+                "error",
+                `JSON export saved, but ${result.missing_attachments} ${result.missing_attachments === 1 ? "attachment file is" : "attachment files are"} missing from the vault and could not be included.`,
+                result.path,
+              );
+            } else {
+              await exported("JSON export")(result.path);
+            }
           }}
           onImportJson={async () => {
             const ok = await confirm({

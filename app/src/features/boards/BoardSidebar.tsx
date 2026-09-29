@@ -11,6 +11,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { Menu, MenuItem } from "../../components/Menu";
 import { cn } from "../../lib/cn";
@@ -46,6 +47,25 @@ export function BoardSidebar({
   onOpenSettings,
 }: BoardSidebarProps) {
   const confirm = useConfirm();
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
+  const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 1180px)").matches);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1180px)");
+    const onChange = () => setNarrow(media.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  // On narrow windows the sidebar slides over the board: move focus in when it opens
+  // and back to the menu button when it closes.
+  useEffect(() => {
+    if (!narrow) return;
+    if (mobileOpen) closeRef.current?.focus();
+    else if (wasOpen.current) document.querySelector<HTMLElement>(".mobile-nav-button")?.focus();
+    wasOpen.current = mobileOpen;
+  }, [mobileOpen, narrow]);
 
   const selectBoard = (id: string) => {
     onSelect(id);
@@ -72,7 +92,17 @@ export function BoardSidebar({
         tabIndex={mobileOpen ? 0 : -1}
         onClick={onCloseMobile}
       />
-      <aside className={cn("sidebar", mobileOpen && "is-open")} aria-label="Workspace navigation">
+      <aside
+        className={cn("sidebar", mobileOpen && "is-open")}
+        aria-label="Workspace navigation"
+        inert={narrow && !mobileOpen}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && narrow && mobileOpen) {
+            event.stopPropagation();
+            onCloseMobile();
+          }
+        }}
+      >
         <div className="sidebar-brand">
           <div className="app-mark" aria-hidden="true">
             <LayoutDashboard size={20} strokeWidth={2.4} />
@@ -81,7 +111,7 @@ export function BoardSidebar({
             <p className="truncate text-[15px] font-bold tracking-[-0.02em]">Local Kanban</p>
             <p className="themed-muted mt-0.5 text-xs">Private by design</p>
           </div>
-          <button type="button" className="icon-button-subtle sidebar-close" onClick={onCloseMobile} aria-label="Close navigation">
+          <button ref={closeRef} type="button" className="icon-button-subtle sidebar-close" onClick={onCloseMobile} aria-label="Close navigation">
             <X size={18} />
           </button>
         </div>

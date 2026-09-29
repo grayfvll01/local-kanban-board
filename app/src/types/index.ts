@@ -51,6 +51,7 @@ export interface AppSettings {
   theme_mode?: string;
   search?: string;
   filters?: string;
+  layout?: string;
 }
 
 export interface Snapshot {
@@ -85,6 +86,16 @@ export interface CardOrderUpdate {
   id: string;
   column_id: string;
   sort_order: number;
+}
+
+export interface AttachResult {
+  added: Attachment[];
+  failed: string[];
+}
+
+export interface ExportSummary {
+  path: string;
+  missing_attachments: number;
 }
 
 export interface ImportSummary {

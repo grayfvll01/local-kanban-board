@@ -38,9 +38,10 @@ export function useUpdater(autoCheck: boolean) {
     }
   }, []);
 
-  const install = useCallback(async () => {
+  /** Returns an error message when the update could not be installed. */
+  const install = useCallback(async (): Promise<string | null> => {
     const update = pending.current;
-    if (!update || busy.current) return;
+    if (!update || busy.current) return null;
     busy.current = true;
     let total = 0;
     let received = 0;
@@ -59,8 +60,11 @@ export function useUpdater(autoCheck: boolean) {
         }
       });
       await relaunch();
+      return null;
     } catch (error) {
-      setState({ status: "error", message: `The update couldn't be installed. ${offlineHint(error)}` });
+      // Keep the update on offer so the user can try again.
+      setState({ status: "available", version: update.version, notes: update.body });
+      return `The update couldn't be installed. ${offlineHint(error)}`;
     } finally {
       busy.current = false;
     }

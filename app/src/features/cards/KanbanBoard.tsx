@@ -17,7 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { CSSProperties, DragEvent, KeyboardEvent } from "react";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { Menu, MenuItem, MenuLabel } from "../../components/Menu";
 import { dropCard, moveCard, sortByOrder, summarizeMarkdown } from "../../lib/board";
@@ -58,11 +58,22 @@ export function KanbanBoard({
 }: KanbanBoardProps) {
   const balanced = columns.length > 0 && columns.length <= 4;
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
+  const pendingFocus = useRef<string | null>(null);
   const confirm = useConfirm();
+
+  // Keyboard and menu moves re-render the card elsewhere; keep focus on it so the
+  // non-drag alternative can be repeated.
+  useLayoutEffect(() => {
+    const id = pendingFocus.current;
+    if (!id) return;
+    pendingFocus.current = null;
+    document.querySelector<HTMLElement>(`[data-card-id="${CSS.escape(id)}"] .card-open-hitarea`)?.focus();
+  }, [cards]);
 
   const handleMove = (card: Card, direction: MoveDirection) => {
     const next = moveCard(cards, columns, card.id, direction);
     if (!next) return;
+    pendingFocus.current = card.id;
     const column = columns.find((item) => item.id === next.find((entry) => entry.id === card.id)?.column_id);
     onReorderCards(next, `Moved “${card.title}” ${directionLabels[direction]}${column ? ` in ${column.name}` : ""}.`);
   };

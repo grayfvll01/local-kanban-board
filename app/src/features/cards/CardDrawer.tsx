@@ -19,9 +19,16 @@ import { handleModalKeyDown, useModalFocus } from "../../components/Dialog";
 import { api, errorMessage } from "../../db/api";
 import { parseTags } from "../../lib/board";
 import { cn } from "../../lib/cn";
-import type { Attachment, Card, CardInput, Column, Priority } from "../../types";
+import type { AttachResult, Attachment, Card, CardInput, Column, Priority } from "../../types";
 
-const colors = ["#14b8a6", "#3b82f6", "#8b5cf6", "#f97316", "#ef4444", "#64748b"];
+const colors = [
+  { value: "#14b8a6", name: "Teal" },
+  { value: "#3b82f6", name: "Blue" },
+  { value: "#8b5cf6", name: "Violet" },
+  { value: "#f97316", name: "Orange" },
+  { value: "#ef4444", name: "Red" },
+  { value: "#64748b", name: "Slate" },
+];
 const priorities: Priority[] = ["low", "medium", "high", "urgent"];
 const MAX_INLINE_FILE_BYTES = 50 * 1024 * 1024;
 
@@ -68,6 +75,8 @@ export function CardDrawer({
   const [attaching, setAttaching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const panelRef = useRef<HTMLElement>(null);
+  const attachButtonRef = useRef<HTMLButtonElement>(null);
+  const busy = useRef(false);
   const confirm = useConfirm();
   useModalFocus(panelRef);
 
@@ -90,7 +99,7 @@ export function CardDrawer({
   });
 
   const requestClose = async () => {
-    if (saving) return;
+    if (saving || attaching) return;
     if (dirty) {
       const discard = await confirm({
         title: "Discard unsaved changes?",
@@ -105,6 +114,7 @@ export function CardDrawer({
   };
 
   const handleSave = async () => {
+    if (busy.current || attaching) return;
     if (!draft.title.trim()) {
       setError("Add a title before saving.");
       return;
@@ -113,6 +123,7 @@ export function CardDrawer({
       setError("Choose a column for this task.");
       return;
     }
+    busy.current = true;
     setSaving(true);
     setError(null);
     try {
@@ -121,6 +132,7 @@ export function CardDrawer({
     } catch (saveError) {
       setError(errorMessage(saveError));
     } finally {
+      busy.current = false;
       setSaving(false);
     }
   };
@@ -143,40 +155,55 @@ export function CardDrawer({
     setDraft((current) => ({ ...current, description: `${current.description.trimEnd()}\n\n${links}`.trim() }));
   };
 
-  const runAttach = async (action: (cardId: string) => Promise<Attachment[]>) => {
+  /** Saves the task if needed, attaches files, and always refreshes so partial results show. */
+  const runAttach = async (action: (cardId: string) => Promise<AttachResult>) => {
+    if (busy.current) return;
+    busy.current = true;
     setAttaching(true);
     setError(null);
+    let changed = false;
     try {
       const cardId = await ensureSaved();
-      const added = await action(cardId);
+      const { added, failed } = await action(cardId);
+      changed = added.length > 0;
       if (added.length) {
         appendImageLinks(added);
-        await onAttachmentsChanged();
         onNotify(`${added.length} ${added.length === 1 ? "file" : "files"} attached`);
       }
+      if (failed.length) setError(failed.join(" "));
     } catch (attachError) {
       setError(errorMessage(attachError));
     } finally {
+      if (changed) await onAttachmentsChanged().catch(() => undefined);
+      busy.current = false;
       setAttaching(false);
     }
   };
 
-  const attachInlineFiles = (files: File[]) =>
-    runAttach(async (cardId) => {
-      const added: Attachment[] = [];
+  const attachInlineFiles = (files: File[]) => {
+    const tooBig = files.find((file) => file.size > MAX_INLINE_FILE_BYTES);
+    if (tooBig) {
+      setError(`${tooBig.name || "The file"} is larger than 50 MB. Use Attach files instead.`);
+      return;
+    }
+    return runAttach(async (cardId) => {
+      const result: AttachResult = { added: [], failed: [] };
       for (const file of files) {
-        if (file.size > MAX_INLINE_FILE_BYTES) {
-          throw new Error(`${file.name} is larger than 50 MB. Use Attach files instead.`);
-        }
         const name = file.name || `pasted-image-${Date.now()}.png`;
-        added.push(await api.addAttachment(cardId, name, file.type || "application/octet-stream", await fileToBase64(file)));
+        try {
+          result.added.push(await api.addAttachment(cardId, name, file.type || "application/octet-stream", await fileToBase64(file)));
+        } catch (fileError) {
+          result.failed.push(`${name}: ${errorMessage(fileError)}`);
+        }
       }
-      return added;
+      return result;
     });
+  };
 
   const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     const files = Array.from(event.clipboardData.files);
-    if (!files.length) return;
+    // Office apps put both text and a picture on the clipboard; keep the text paste.
+    if (!files.length || event.clipboardData.getData("text/plain")) return;
     event.preventDefault();
     void attachInlineFiles(files);
   };
@@ -200,6 +227,8 @@ export function CardDrawer({
       await api.deleteAttachment(attachment.id);
       await onAttachmentsChanged();
       onNotify("Attachment removed");
+      // The removed row's buttons are gone, so keep keyboard focus in the drawer.
+      window.requestAnimationFrame(() => (attachButtonRef.current ?? panelRef.current)?.focus());
     } catch (removeError) {
       setError(errorMessage(removeError));
     }
@@ -235,8 +264,21 @@ export function CardDrawer({
   const markdownComponents = {
     img({ src, alt }: { src?: string | Blob; alt?: string }) {
       const value = typeof src === "string" ? src : "";
+      if (value.startsWith("data:")) return <img src={value} alt={alt ?? ""} />;
       if (!value.startsWith("attachment:")) {
-        return <img src={value} alt={alt ?? ""} loading="lazy" />;
+        // Web images are never fetched automatically, so previewing notes stays offline.
+        return (
+          <a
+            href={value}
+            className="remote-image-link"
+            onClick={(event) => {
+              event.preventDefault();
+              if (/^https?:/i.test(value)) api.openUrl(value).catch((linkError) => setError(errorMessage(linkError)));
+            }}
+          >
+            <FileImage size={15} aria-hidden="true" /> Web image: {alt || value}
+          </a>
+        );
       }
       const attachment = findAttachment(attachments, value);
       if (!attachment) {
@@ -390,14 +432,14 @@ export function CardDrawer({
                 <div className="color-swatch-tray flex h-10 items-center gap-2 rounded-lg px-2">
                   {colors.map((color) => (
                     <button
-                      key={color}
+                      key={color.value}
                       type="button"
-                      aria-label={`Color ${color}`}
-                      aria-pressed={draft.color === color}
-                      title={color}
-                      className={cn("color-swatch h-6 w-6 rounded-full", draft.color === color && "is-selected")}
-                      style={{ backgroundColor: color }}
-                      onClick={() => update({ color })}
+                      aria-label={color.name}
+                      aria-pressed={draft.color === color.value}
+                      title={color.name}
+                      className={cn("color-swatch h-6 w-6 rounded-full", draft.color === color.value && "is-selected")}
+                      style={{ backgroundColor: color.value }}
+                      onClick={() => update({ color: color.value })}
                     />
                   ))}
                   <input
@@ -435,9 +477,10 @@ export function CardDrawer({
                     </button>
                   </div>
                   <button
+                    ref={attachButtonRef}
                     type="button"
                     className="toolbar-button compact"
-                    disabled={attaching}
+                    disabled={attaching || saving}
                     onClick={() => void runAttach((cardId) => api.attachFiles(cardId))}
                   >
                     {attaching ? <Loader2 size={15} className="spin" aria-hidden="true" /> : <Paperclip size={15} aria-hidden="true" />}
@@ -515,7 +558,7 @@ export function CardDrawer({
           <p className="themed-muted text-xs">
             {dirty ? "Unsaved changes · " : ""}Ctrl+S to save · Esc to close
           </p>
-          <button type="button" className="primary-button" disabled={saving} onClick={() => void handleSave()}>
+          <button type="button" className="primary-button" disabled={saving || attaching} onClick={() => void handleSave()}>
             {saving ? <Loader2 size={16} className="spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
             {saving ? "Saving…" : "Save task"}
           </button>
@@ -540,7 +583,7 @@ function createDraft(card: Card | null | undefined, defaultColumnId: string): Dr
 
 function defaultCardColor() {
   const accent = getComputedStyle(document.documentElement).getPropertyValue("--color-accent").trim();
-  return /^#[0-9a-f]{6}$/i.test(accent) ? accent.toLowerCase() : colors[1];
+  return /^#[0-9a-f]{6}$/i.test(accent) ? accent.toLowerCase() : colors[1].value;
 }
 
 /** Supports `attachment:<id>` references and older `attachment:<file name>` ones. */

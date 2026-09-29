@@ -1,11 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AttachResult,
   Attachment,
   Board,
   Card,
   CardInput,
   CardOrderUpdate,
   Column,
+  ExportSummary,
   ImportSummary,
   RestoreSummary,
   Snapshot,
@@ -64,12 +66,12 @@ export const api = {
     previewOnly(undefined) ?? call<void>("save_setting", { keyName: key, value }),
   addAttachment: (cardId: string, fileName: string, mimeType: string, dataBase64: string) =>
     call<Attachment>("add_attachment", { cardId, fileName, mimeType, dataBase64 }),
-  attachFiles: (cardId: string) => call<Attachment[]>("attach_files", { cardId }),
+  attachFiles: (cardId: string) => call<AttachResult>("attach_files", { cardId }),
   deleteAttachment: (id: string) => call<void>("delete_attachment", { id }),
   openAttachment: (id: string) => call<"opened" | "revealed">("open_attachment", { id }),
   revealPath: (path: string) => call<void>("reveal_path", { path }),
   openUrl: (url: string) => call<void>("open_url", { url }),
-  exportJson: () => call<string>("export_json"),
+  exportJson: () => call<ExportSummary>("export_json"),
   importJsonFile: () => call<ImportSummary | null>("import_json_file"),
   exportBoardMarkdown: (boardId: string) => call<string>("export_board_markdown", { boardId }),
   exportBoardCsv: (boardId: string) => call<string>("export_board_csv", { boardId }),

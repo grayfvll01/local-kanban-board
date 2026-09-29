@@ -17,7 +17,7 @@ npm ci
 npm run dev
 ```
 
-Before opening a pull request, run the same checks as CI:
+Before opening a pull request, run the same checks as CI (`check` includes clippy with warnings as errors):
 
 ```bat
 npm run check

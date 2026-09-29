@@ -32,12 +32,15 @@ const AUTO_BACKUP_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 const AUTO_BACKUPS_TO_KEEP: usize = 10;
 const PRIORITIES: [&str; 4] = ["low", "medium", "high", "urgent"];
 const DEFAULT_CARD_COLOR: &str = "#3b82f6";
-/// File types that are revealed in Explorer instead of being launched directly.
-const REVEAL_ONLY_EXTENSIONS: [&str; 28] = [
-    "appx", "bat", "cmd", "com", "cpl", "dll", "exe", "hta", "inf", "jar", "js", "jse", "lnk",
-    "msc", "msi", "msix", "pif", "ps1", "psm1", "reg", "scf", "scr", "sys", "url", "vbe", "vbs",
-    "wsf", "wsh",
+/// File types that open directly in their default app. Everything else, including any
+/// type that can run code, is shown in Explorer instead so it never launches by accident.
+const OPEN_DIRECT_EXTENSIONS: [&str; 30] = [
+    "avif", "bmp", "csv", "doc", "docx", "gif", "heic", "jpeg", "jpg", "json", "log", "m4a", "md",
+    "mov", "mp3", "mp4", "odp", "ods", "odt", "pdf", "png", "ppt", "pptx", "rtf", "txt", "wav",
+    "webm", "webp", "xls", "xlsx",
 ];
+/// Windows paths longer than this cannot be opened by many apps.
+const MAX_WINDOWS_PATH: usize = 259;
 
 const SCHEMA_V1: &str = "
     CREATE TABLE IF NOT EXISTS boards (
@@ -232,7 +235,21 @@ struct ExportAttachment {
     file_name: String,
     mime_type: String,
     created_at: String,
-    data_base64: String,
+    /// Absent when the file could not be read at export time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    data_base64: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ExportSummary {
+    path: String,
+    missing_attachments: usize,
+}
+
+#[derive(Debug, Serialize)]
+struct AttachResult {
+    added: Vec<Attachment>,
+    failed: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -856,12 +873,9 @@ impl Database {
     ) -> AppResult<Attachment> {
         self.ensure_card(card_id)?;
         let attachment_id = id();
-        let safe_name = safe_file_name(file_name);
+        let safe_name = safe_file_name(file_name, self.name_budget(card_id)?);
         let path = self.attachment_path(card_id, &attachment_id, &safe_name);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(to_string)?;
-        }
-        fs::write(&path, bytes)
+        write_file_atomic(&path, bytes)
             .map_err(|error| format!("Could not save the attachment: {error}"))?;
         self.insert_attachment_row(card_id, &attachment_id, &safe_name, mime_type, &path)
     }
@@ -873,7 +887,7 @@ impl Database {
             .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_else(|| "attachment".to_string());
         let attachment_id = id();
-        let safe_name = safe_file_name(&file_name);
+        let safe_name = safe_file_name(&file_name, self.name_budget(card_id)?);
         let path = self.attachment_path(card_id, &attachment_id, &safe_name);
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(to_string)?;
@@ -881,6 +895,20 @@ impl Database {
         fs::copy(source, &path)
             .map_err(|error| format!("Could not copy {file_name}: {error}"))?;
         self.insert_attachment_row(card_id, &attachment_id, &safe_name, mime_from_name(&safe_name), &path)
+    }
+
+    /// How many characters an attachment file name may use so its full path stays within
+    /// the Windows path limit that other apps rely on.
+    fn name_budget(&self, card_id: &str) -> AppResult<usize> {
+        let prefix = self.attachment_path(card_id, &id(), "").as_os_str().len();
+        let budget = MAX_WINDOWS_PATH.saturating_sub(prefix);
+        if budget < 12 {
+            return Err(
+                "The vault folder's path is too long to store attachments. Move the vault to a shorter path, such as Documents."
+                    .to_string(),
+            );
+        }
+        Ok(budget.min(MAX_ATTACHMENT_NAME_CHARS))
     }
 
     fn insert_attachment_row(
@@ -915,15 +943,26 @@ impl Database {
         self.attachment(attachment_id)
     }
 
+    /// Deletes the file first so a file that is open in another app is never left behind
+    /// without a record.
     fn delete_attachment(&mut self, id: &str) -> AppResult<()> {
         let attachment = self.attachment(id)?;
+        let path = PathBuf::from(&attachment.file_path);
+        if is_within(&path, &self.attachments_dir) {
+            match fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(_) => {
+                    return Err(format!(
+                        "{} is open in another app. Close it and try again.",
+                        attachment.file_name
+                    ))
+                }
+            }
+        }
         self.conn
             .execute("DELETE FROM attachments WHERE id = ?1", params![id])
             .map_err(to_string)?;
-        let path = PathBuf::from(&attachment.file_path);
-        if is_within(&path, &self.attachments_dir) {
-            let _ = fs::remove_file(path);
-        }
         Ok(())
     }
 
@@ -966,25 +1005,34 @@ impl Database {
         for card_id in card_ids.iter().filter(|card_id| is_safe_id(card_id)) {
             let dir = self.attachments_dir.join(card_id);
             if dir.is_dir() {
-                let _ = fs::remove_dir_all(dir);
+                if let Err(error) = fs::remove_dir_all(&dir) {
+                    eprintln!("Could not remove {}: {error}", dir.display());
+                }
             }
         }
     }
 
-    fn export_bundle(&self) -> AppResult<ExportBundle> {
+    fn export_bundle(&self) -> AppResult<(ExportBundle, usize)> {
         let mut cards = Vec::new();
+        let mut missing = 0;
         for card in self.cards()? {
             let mut attachments = Vec::new();
             for attachment in &card.attachments {
-                // A missing file must not block an export of everything else.
-                let bytes = fs::read(&attachment.file_path).unwrap_or_default();
+                // A missing file must not block the export, and must never be written as
+                // empty data that could later overwrite a good copy.
+                let data = fs::read(&attachment.file_path)
+                    .ok()
+                    .map(|bytes| general_purpose::STANDARD.encode(bytes));
+                if data.is_none() {
+                    missing += 1;
+                }
                 attachments.push(ExportAttachment {
                     id: attachment.id.clone(),
                     card_id: attachment.card_id.clone(),
                     file_name: attachment.file_name.clone(),
                     mime_type: attachment.mime_type.clone(),
                     created_at: attachment.created_at.clone(),
-                    data_base64: general_purpose::STANDARD.encode(bytes),
+                    data_base64: data,
                 });
             }
             cards.push(ExportCard {
@@ -1003,27 +1051,31 @@ impl Database {
                 attachments,
             });
         }
-        Ok(ExportBundle {
+        let bundle = ExportBundle {
             version: EXPORT_FORMAT_VERSION,
             exported_at: now(),
             boards: self.boards()?,
             columns: self.columns()?,
             cards,
             settings: self.settings()?,
-        })
+        };
+        Ok((bundle, missing))
     }
 
-    fn export_json(&self) -> AppResult<PathBuf> {
-        let bundle = self.export_bundle()?;
+    fn export_json(&self) -> AppResult<ExportSummary> {
+        let (bundle, missing_attachments) = self.export_bundle()?;
         let json = serde_json::to_string_pretty(&bundle).map_err(to_string)?;
         let path = unique_path(
             &self.exports_dir,
             &format!("local-kanban-export-{}", file_stamp()),
             "json",
         );
-        fs::write(&path, json.as_bytes())
+        write_file_atomic(&path, json.as_bytes())
             .map_err(|error| format!("Could not write the export: {error}"))?;
-        Ok(path)
+        Ok(ExportSummary {
+            path: path_string(path),
+            missing_attachments,
+        })
     }
 
     /// Replaces the vault contents with an export bundle. Everything is validated and a
@@ -1067,21 +1119,25 @@ impl Database {
                 if !is_safe_id(&attachment.id) || !attachment_ids.insert(attachment.id.as_str()) {
                     return Err(invalid("an attachment has a missing or duplicate identifier"));
                 }
-                let bytes = general_purpose::STANDARD
-                    .decode(attachment.data_base64.as_bytes())
-                    .map_err(|_| invalid("an attachment could not be decoded"))?;
-                files.push((card.id.as_str(), attachment, safe_file_name(&attachment.file_name), bytes));
+                let bytes = match &attachment.data_base64 {
+                    Some(data) => Some(
+                        general_purpose::STANDARD
+                            .decode(data.as_bytes())
+                            .map_err(|_| invalid("an attachment could not be decoded"))?,
+                    ),
+                    None => None,
+                };
+                let safe_name = safe_file_name(&attachment.file_name, self.name_budget(&card.id)?);
+                files.push((card.id.as_str(), attachment, safe_name, bytes));
             }
         }
 
         let backup = self.backup("before-import")?;
 
         for (card_id, attachment, safe_name, bytes) in &files {
+            let Some(bytes) = bytes else { continue };
             let path = self.attachment_path(card_id, &attachment.id, safe_name);
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent).map_err(to_string)?;
-            }
-            fs::write(&path, bytes)
+            write_file_atomic(&path, bytes)
                 .map_err(|error| format!("Could not write an imported attachment: {error}"))?;
         }
 
@@ -1184,7 +1240,7 @@ impl Database {
         Ok(ImportSummary {
             boards: bundle.boards.len(),
             cards: bundle.cards.len(),
-            attachments: files.len(),
+            attachments: files.iter().filter(|(_, _, _, bytes)| bytes.is_some()).count(),
             backup_path: backup.to_string_lossy().to_string(),
         })
     }
@@ -1367,7 +1423,11 @@ impl AppState {
     }
 
     fn config(&self) -> AppConfig {
-        read_config(&self.config_path).unwrap_or_default()
+        read_config(&self.config_path).unwrap_or_else(|_| {
+            // Keep the unreadable file for troubleshooting before it gets replaced.
+            let _ = fs::copy(&self.config_path, self.config_path.with_extension("json.bad"));
+            AppConfig::default()
+        })
     }
 
     fn snapshot(&self) -> AppResult<Snapshot> {
@@ -1556,20 +1616,31 @@ async fn attach_files(
     card_id: String,
     window: Window,
     state: State<'_, AppState>,
-) -> AppResult<Vec<Attachment>> {
+) -> AppResult<AttachResult> {
     state.with_db(|db| db.ensure_card(&card_id))?;
     let Some(files) = rfd::FileDialog::new()
         .set_title("Attach files")
         .set_parent(&window)
         .pick_files()
     else {
-        return Ok(Vec::new());
+        return Ok(AttachResult {
+            added: Vec::new(),
+            failed: Vec::new(),
+        });
     };
+    // Keep every file that was copied, and report the ones that were not.
     state.with_db(|db| {
-        files
-            .iter()
-            .map(|file| db.copy_attachment(&card_id, file))
-            .collect()
+        let mut result = AttachResult {
+            added: Vec::new(),
+            failed: Vec::new(),
+        };
+        for file in &files {
+            match db.copy_attachment(&card_id, file) {
+                Ok(attachment) => result.added.push(attachment),
+                Err(error) => result.failed.push(error),
+            }
+        }
+        Ok(result)
     })
 }
 
@@ -1578,8 +1649,8 @@ async fn delete_attachment(id: String, state: State<'_, AppState>) -> AppResult<
     state.with_db(|db| db.delete_attachment(&id))
 }
 
-/// Opens an attachment with its default app. Executable and script files are shown in
-/// Explorer instead so an imported file can never run by accident.
+/// Opens common documents and media with their default app. Every other file type is
+/// shown in Explorer instead, so an imported file can never run by accident.
 #[tauri::command]
 async fn open_attachment(id: String, state: State<'_, AppState>) -> AppResult<String> {
     let (path, vault) = state.with_db(|db| {
@@ -1592,11 +1663,7 @@ async fn open_attachment(id: String, state: State<'_, AppState>) -> AppResult<St
     if !is_within(&path, &vault) {
         return Err("Only files inside the vault can be opened.".to_string());
     }
-    let extension = path
-        .extension()
-        .map(|value| value.to_string_lossy().to_lowercase())
-        .unwrap_or_default();
-    if REVEAL_ONLY_EXTENSIONS.contains(&extension.as_str()) {
+    if !opens_directly(&path) {
         opener::reveal(&path).map_err(to_string)?;
         return Ok("revealed".to_string());
     }
@@ -1629,8 +1696,8 @@ async fn open_url(url: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-async fn export_json(state: State<'_, AppState>) -> AppResult<String> {
-    state.with_db(|db| db.export_json().map(path_string))
+async fn export_json(state: State<'_, AppState>) -> AppResult<ExportSummary> {
+    state.with_db(|db| db.export_json())
 }
 
 #[tauri::command]
@@ -1827,9 +1894,15 @@ fn write_config(path: &Path, config: &AppConfig) -> AppResult<()> {
     }
     let json = serde_json::to_string_pretty(config).map_err(to_string)?;
     let temp = path.with_extension("json.tmp");
-    fs::write(&temp, json)
-        .and_then(|_| fs::rename(&temp, path))
-        .map_err(|error| {
+    let write = || -> std::io::Result<()> {
+        use std::io::Write;
+        let mut file = fs::File::create(&temp)?;
+        file.write_all(json.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temp, path)
+    };
+    write().map_err(|error| {
             format!("Could not save the app settings at {}: {error}", path.display())
         })
 }
@@ -1958,14 +2031,37 @@ fn is_safe_id(value: &str) -> bool {
             .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
 }
 
-/// Sanitizes a file name and keeps it short enough for Windows path limits.
-fn safe_file_name(value: &str) -> String {
+fn opens_directly(path: &Path) -> bool {
+    path.extension()
+        .map(|value| value.to_string_lossy().to_lowercase())
+        .is_some_and(|extension| OPEN_DIRECT_EXTENSIONS.contains(&extension.as_str()))
+}
+
+/// Writes through a temporary file so a failed write never truncates an existing file.
+fn write_file_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let temp = path.with_file_name(format!(
+        ".{}.tmp",
+        path.file_name().map(|name| name.to_string_lossy()).unwrap_or_default()
+    ));
+    let result = fs::write(&temp, bytes).and_then(|_| fs::rename(&temp, path));
+    if result.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    result
+}
+
+/// Sanitizes a file name and keeps it within `max_chars` for Windows path limits.
+fn safe_file_name(value: &str, max_chars: usize) -> String {
     let sanitized = sanitize_filename::sanitize(value.trim());
     let sanitized = sanitized.trim_matches(|ch: char| ch == '.' || ch.is_whitespace());
     if sanitized.is_empty() {
         return "attachment".to_string();
     }
-    if sanitized.chars().count() <= MAX_ATTACHMENT_NAME_CHARS {
+    let max_chars = max_chars.max(12);
+    if sanitized.chars().count() <= max_chars {
         return sanitized.to_string();
     }
     let path = Path::new(sanitized);
@@ -1973,7 +2069,7 @@ fn safe_file_name(value: &str) -> String {
         .extension()
         .map(|value| value.to_string_lossy().to_string())
         .filter(|value| value.chars().count() <= 10);
-    let stem_limit = MAX_ATTACHMENT_NAME_CHARS - extension.as_ref().map_or(0, |ext| ext.chars().count() + 1);
+    let stem_limit = max_chars.saturating_sub(extension.as_ref().map_or(0, |ext| ext.chars().count() + 1)).max(1);
     let stem: String = path
         .file_stem()
         .map(|value| value.to_string_lossy().to_string())
@@ -2249,6 +2345,7 @@ mod tests {
             .upsert_card(card_input(&board, &second, "Persistent card"))
             .expect("card saved");
         db.save_setting("selected_board_id", &board.id).expect("setting saved");
+        db.save_setting("layout", "minimal").expect("setting saved");
         drop(db);
 
         let reopened = Database::open_at(dir.0.clone()).expect("database reopens");
@@ -2268,6 +2365,7 @@ mod tests {
         assert_eq!(saved.tags, vec!["qa".to_string(), "release".to_string()]);
         assert_eq!(saved.color, "#abcdef");
         assert_eq!(snapshot.settings.get("selected_board_id"), Some(&board.id));
+        assert_eq!(snapshot.settings.get("layout").map(String::as_str), Some("minimal"));
     }
 
     #[test]
@@ -2338,16 +2436,22 @@ mod tests {
         source
             .store_attachment(&card.id, "notes?.txt", "text/plain", b"hello")
             .expect("attachment saved");
-        let export_path = source.export_json().expect("export written");
+        let export = source.export_json().expect("export written");
+        assert_eq!(export.missing_attachments, 0);
         let bundle: ExportBundle =
-            serde_json::from_str(&fs::read_to_string(export_path).expect("export reads"))
+            serde_json::from_str(&fs::read_to_string(&export.path).expect("export reads"))
                 .expect("export parses");
 
         let target_dir = TempDir::new("import");
         let mut target = Database::open_at(target_dir.0.clone()).expect("target opens");
         let summary = target.import_bundle(bundle).expect("import succeeds");
         assert_eq!(summary.attachments, 1);
-        assert!(Path::new(&summary.backup_path).exists());
+        let backup = Connection::open_with_flags(&summary.backup_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .expect("backup opens");
+        let welcome: i64 = backup
+            .query_row("SELECT COUNT(*) FROM cards WHERE title = 'Welcome to Local Kanban'", [], |row| row.get(0))
+            .expect("backup readable");
+        assert_eq!(welcome, 1, "backup holds the data from before the import");
 
         let imported = target.card_by_id(&card.id).expect("card imported");
         assert_eq!(imported.title, "With file");
@@ -2445,15 +2549,72 @@ mod tests {
     }
 
     #[test]
+    fn unreadable_attachments_are_exported_as_missing_and_never_truncate_on_import() {
+        let dir = TempDir::new("missing-attachment");
+        let mut db = Database::open_at(dir.0.clone()).expect("database opens");
+        let (board, columns) = first_board_columns(&db);
+        let card = db.upsert_card(card_input(&board, &columns[0], "Files")).expect("card saved");
+        let attachment = db
+            .store_attachment(&card.id, "report.pdf", "application/pdf", b"original")
+            .expect("attachment saved");
+        let original = PathBuf::from(&attachment.file_path);
+        fs::rename(&original, dir.0.join("moved-away.pdf")).expect("file moved away");
+
+        let export = db.export_json().expect("export written");
+        assert_eq!(export.missing_attachments, 1);
+        let bundle: ExportBundle =
+            serde_json::from_str(&fs::read_to_string(&export.path).expect("export reads"))
+                .expect("export parses");
+
+        fs::rename(dir.0.join("moved-away.pdf"), &original).expect("file restored");
+        db.import_bundle(bundle).expect("import succeeds");
+        assert_eq!(fs::read(&original).expect("file still there"), b"original");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn attachments_open_in_other_apps_are_not_forgotten() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = TempDir::new("locked-attachment");
+        let mut db = Database::open_at(dir.0.clone()).expect("database opens");
+        let (board, columns) = first_board_columns(&db);
+        let card = db.upsert_card(card_input(&board, &columns[0], "Locked")).expect("card saved");
+        let attachment = db
+            .store_attachment(&card.id, "sheet.xlsx", "", b"data")
+            .expect("attachment saved");
+        let lock = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&attachment.file_path)
+            .expect("file locked");
+        assert!(db.delete_attachment(&attachment.id).is_err());
+        assert!(db.attachment(&attachment.id).is_ok(), "record kept while the file is open");
+        drop(lock);
+        db.delete_attachment(&attachment.id).expect("deleted once closed");
+        assert!(!Path::new(&attachment.file_path).exists());
+    }
+
+    #[test]
+    fn only_documents_and_media_open_directly() {
+        for name in ["a.pdf", "b.PNG", "c.docx", "d.txt"] {
+            assert!(opens_directly(Path::new(name)), "{name}");
+        }
+        for name in ["a.exe", "b.chm", "c.py", "d.library-ms", "e.appref-ms", "f.lnk", "noext", "g.html"] {
+            assert!(!opens_directly(Path::new(name)), "{name}");
+        }
+    }
+
+    #[test]
     fn helpers_sanitize_untrusted_values() {
         assert!(!is_safe_id("../x"));
         assert!(is_safe_id("c1"));
         assert_eq!(clean_color("red"), DEFAULT_CARD_COLOR);
         assert_eq!(csv_cell("=SUM(A1)"), "'=SUM(A1)");
         let long = format!("{}.png", "a".repeat(200));
-        let safe = safe_file_name(&long);
+        let safe = safe_file_name(&long, MAX_ATTACHMENT_NAME_CHARS);
         assert!(safe.chars().count() <= MAX_ATTACHMENT_NAME_CHARS);
         assert!(safe.ends_with(".png"));
-        assert_eq!(safe_file_name("..."), "attachment");
+        assert!(safe_file_name(&long, 20).chars().count() <= 20);
+        assert_eq!(safe_file_name("...", MAX_ATTACHMENT_NAME_CHARS), "attachment");
     }
 }

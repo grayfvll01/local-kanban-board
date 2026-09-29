@@ -20,7 +20,8 @@ Apply these rules to every product, code, documentation, and release change in t
 ## Engineering quality
 
 - Keep React components typed and warnings-free. Avoid duplicating business state outside the Rust/SQLite boundary.
-- Run `npm run check` (version check, typecheck, UI tests, UI build, `cargo check --locked`) and `npm run test:rust` from `app` before merging.
+- Run `npm run check` (version check, typecheck, UI tests including theme contrast, UI build, `cargo check --locked`, clippy) and `npm run test:rust` from `app` before merging.
+- New or changed theme palettes must pass `tests/themes.test.ts` (WCAG 2.2 AA contrast for every text surface).
 - Add a schema migration step and a test for any vault format change. Import and restore must back up first and validate before replacing data.
 - Keep generated build output and executable artifacts out of Git; publish installers through GitHub Releases.
 - Prefer the smallest dependency-free implementation that keeps behavior understandable and testable.
