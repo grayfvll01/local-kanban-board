@@ -20,27 +20,27 @@
     "lint:rust": "cargo clippy --locked --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.9.0",
+    "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-process": "^2.4.0",
-    "@tauri-apps/plugin-updater": "^2.13.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "lucide-react": "^0.577.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.11.5",
+    "@tauri-apps/cli": "^2.12.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.0.0",
-    "autoprefixer": "^10.6.1",
-    "postcss": "^8.5.28",
+    "autoprefixer": "^10.6.2",
+    "postcss": "^8.5.32",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
-    "vite": "^6.3.5"
+    "vite": "^6.4.5"
   },
   "license": "MIT",
   "repository": {
